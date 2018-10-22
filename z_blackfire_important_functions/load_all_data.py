@@ -51,3 +51,4 @@ a.set_all_currency()
 #mys = mydb['stocks']
 #inf = mys['infos']
 #print(json.dumps(inf.find_one(), indent=1))
+

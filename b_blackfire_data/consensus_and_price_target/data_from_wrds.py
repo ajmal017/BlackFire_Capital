@@ -34,7 +34,8 @@ def set_price_target():
 
     db.close()
 
-    obs_ = 1000000
+    obs_ = 100000
+    count = 100000
     iter_ = int(np.round(count / obs_))
 
     if iter_ * obs_ < count:
@@ -52,7 +53,7 @@ def set_price_target():
                            offset=i * obs_)
 
         myclient = pymongo.MongoClient("mongodb://localhost:27017/")
-        mydb = myclient["Blackfire_Capital"]
+
 
         for pos in range(res.shape[0]):
 
@@ -67,13 +68,12 @@ def set_price_target():
             if cusip == None:
                 cusip = tic
             pt = spt(cusip, tic, cname, estim, value, hor, cur, date)
-            t = pt_db(mydb, pt.get_info())
+            t = pt_db(myclient, pt.get_info())
             t.add_price_target()
 
         myclient.close()
 
         db.close()
-
 
 def set_consensus():
     db = wrds.Connection()
@@ -86,7 +86,8 @@ def set_consensus():
 
     db.close()
 
-    obs_ = 1000000
+    obs_ = 100000
+    count = 100000
     iter_ = int(np.round(count / obs_))
 
     if iter_ * obs_ < count:
@@ -104,11 +105,9 @@ def set_consensus():
                            offset=i * obs_)
 
         myclient = pymongo.MongoClient("mongodb://localhost:27017/")
-        mydb = myclient["Blackfire_Capital"]
 
         for pos in range(res.shape[0]):
-            ['ticker', 'cusip', 'cname', 'estimid', 'ireccd',
-             'anndats']
+
             tic = res[entete[0]][pos]
             cusip = res[entete[1]][pos]
             cname = res[entete[2]][pos]
@@ -119,8 +118,8 @@ def set_consensus():
             if cusip == None:
                 cusip = tic
             pt = scs(cusip, tic, cname, estim, value, date)
-            c = cs_db(mydb, pt.get_info())
-            c.add_price_target()
+            c = cs_db(myclient, pt.get_info())
+            c.add_consensus()
 
         myclient.close()
 

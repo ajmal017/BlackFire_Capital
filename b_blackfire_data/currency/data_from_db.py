@@ -15,8 +15,8 @@ def set_currency_gbp():
                              table = "g_exrt_mth")
     
     myclient = pymongo.MongoClient("mongodb://localhost:27017/")
-    mydb = myclient["Blackfire_Capital"]
-    mycur = mydb['currency']
+    mydb = myclient["currency"]
+    mycur = mydb['GBP']
     
     entete = ['datadate', 'fromcurm', 'tocurm', 'exratm', 'exrat1m']
     
@@ -32,9 +32,8 @@ def set_currency_gbp():
         to = res[entete[2]][pos]
         rate = res[entete[3]][pos]
         ratem = res[entete[4]][pos]
-        
-        cur = mycur[fr]
-        data_date = cur[date]
+
+        data_date = mycur[date]
         data = {"_id":to, "rate":rate, "rate1m":ratem}
         
         try:
@@ -54,8 +53,8 @@ def set_currency_usd():
                              table = "hsxrat")
     
     myclient = pymongo.MongoClient("mongodb://localhost:27017/")
-    mydb = myclient["Blackfire_Capital"]
-    mycur = mydb['currency']
+    mydb = myclient["currency"]
+    mycur = mydb['USD']
     
     entete = ['pubdats', 'exrat', 'curr']
     
@@ -69,9 +68,8 @@ def set_currency_usd():
         date = str(date.year) + 'M' + str(date.month)
         rate = res[entete[1]][pos]
         to = res[entete[2]][pos]
-        
-        cur = mycur['USD']
-        data_date = cur[date]
+
+        data_date = mycur[date]
         data = {"_id":to, "rate":rate}
         
         try:
@@ -91,8 +89,8 @@ def set_currency_euro():
                              table = "eurx")
     
     myclient = pymongo.MongoClient("mongodb://localhost:27017/")
-    mydb = myclient["Blackfire_Capital"]
-    mycur = mydb['currency']
+    mydb = myclient["currency"]
+    mycur = mydb['EUR']
     
     entete = ['sdates', 'curcodef', 'exchrate']
     
@@ -107,9 +105,8 @@ def set_currency_euro():
         rate = res[entete[2]][pos]
         to = res[entete[1]][pos]
         
-        cur = mycur['EUR']
-        data_date = cur[date]
-        data = {"_id":to, "rate":rate}
+        data_date = mycur[date]
+        data = {"_id": to, "rate":rate}
         
         try:
             data_date.insert_one(data)
@@ -120,4 +117,5 @@ def set_currency_euro():
               
     myclient.close()
     db.close()
+
 

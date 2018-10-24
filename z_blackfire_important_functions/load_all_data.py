@@ -34,21 +34,27 @@ class set_stocks_data_in_db():
     def set_all_currency(data):
         print('set currency')
         curr_db.set_currency_usd()
-        curr_db.set_currency_gbp()
-        curr_db.set_currency_euro()
+        #curr_db.set_currency_gbp()
+        #curr_db.set_currency_euro()
 
 
 a = set_stocks_data_in_db('')
 #a.set_all_infos()
-a.set_all_currency()
+#a.set_all_currency()
 #a.set_all_price_target()
 # a.set_all_consensus()
-# a.set_all_price()
-#import pymongo
-#import json
-#myclient = pymongo.MongoClient("mongodb://localhost:27017/")
-#mydb = myclient["Blackfire_Capital"]
-#mys = mydb['stocks']
-#inf = mys['infos']
-#print(json.dumps(inf.find_one(), indent=1))
+#a.set_all_price()
+import pymongo
+import json
+from bson.json_util import dumps, CANONICAL_JSON_OPTIONS
+from bson import ObjectId
 
+myclient = pymongo.MongoClient("mongodb://localhost:27017/")
+#a = myclient.list_database_names()
+#for x in a:
+#    print(x)
+
+mydb = myclient["stocks_2015M9"].value
+for x in mydb.find():
+    print(x)
+print(json.dumps(mydb.find_one(), indent=1))

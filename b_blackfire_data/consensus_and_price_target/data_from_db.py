@@ -19,23 +19,21 @@ class price_target():
                 
             infos = stocks_dat[0]
             data = stocks_dat[1]
-            ibes_db = value.database["ibes"]
-            infos_db = ibes_db['infos']
+
+            infos_db = value.database['price_target_infos'].value
             
             try:
                 infos_db.insert_one(infos)
             except pymongo.errors.DuplicateKeyError:
-                
-                myquery = { "_id": infos["_id"] }
-                newvalue = {"$set": infos}
-                infos_db.update_one(myquery, newvalue)
+                print(infos["_id"], "exists")
+                #myquery = { "_id": infos["_id"] }
+                #newvalue = {"$set": infos}
+                #infos_db.update_one(myquery, newvalue)
             
             date = str(data['date_activate'].year) + 'M'+\
                     str(data['date_activate'].month)
+            pt = value.database["price_target_"+date].value
             data['date_activate'] = date + 'J'+ str(data['date_activate'].day)
-            add_db = ibes_db[infos["_id"]]
-            data_db = add_db[date]
-            pt = data_db['price target']
             try:
                 pt.insert_one(data)
             except pymongo.errors.DuplicateKeyError:

@@ -135,7 +135,9 @@ class price_target:
         
         d = dict()
         d_ = dict()
-        d['_id'] = x.analyst
+        d['cusip'] = x.cusip
+        d['ticker'] = x.tic
+        d['analyst'] = x.analyst
         d['price'] = x.price_target
         d['horizon'] = x.horizon
         d['curr'] = x.currency

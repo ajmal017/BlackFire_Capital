@@ -32,24 +32,19 @@ def test_value(value, v):
     return value
 
 
-def set_table_basic_info(global_=True):
-    if global_:
+def set_table_basic_info(x):
+
+    if x.global_:
         g = "g_"
+        global_ = "Global Infos"
     else:
         g = ""
+        global_ = 'North America'
     db = wrds.Connection()
     myclient = pymongo.MongoClient("mongodb://localhost:27017/")
-    # myclient.drop_database("Blackfire_Capital")
     mydb = myclient["stocks_infos"]
-
     res = db.get_table(library="comp", table=g + "security")
-    #
-    ##    res = db.raw_sql("select a.gvkey, a.tic, a.iid, a.cusip, a.exchg,"+
-    ##           "a.excntry, a.ibtic, a.isin, a.secstat, a.sedol,"+
-    ##           "a.tpci, b.conm, b.fic,b.sic,b.naics "+
-    ##           "from comp."+g+"security a join comp."+g+"namesq b on "+
-    ##           "a.gvkey = b.gvkey" )
-    #
+
     for pos in range(res.shape[0]):
 
         ticker = res['tic'][pos]
@@ -78,7 +73,7 @@ def set_table_basic_info(global_=True):
         stock_id = [{'ticker': ticker, 'ibtic': ibtic, 'iid': iid, 'cusip': cusip,
                      'exhg': exchg, 'excntry': excntry, 'isin': isin,
                      'secstat': secstat, 'sedol': sedol, 'tpci': tpci,
-                     'stock_curr': None, 'cusip_8': cusip_8}]
+                     'cusip_8': cusip_8}]
         a = sif(gvkey, None, None, None, None, None, None, None, stock_id)
 
         info_to_add = st_sif(mydb, a.get_info())
@@ -91,7 +86,7 @@ def set_table_basic_info(global_=True):
         gvkey = res['gvkey'][pos]
         company = res['conm'][pos]
 
-        if global_:
+        if x.global_:
             fic = res['fic'][pos]
         else:
             fic = None
@@ -107,112 +102,106 @@ def set_table_basic_info(global_=True):
     myclient.close()
     db.close()
 
+    return global_ + " Infos completed"
 
-def set_price(library, table, global_):
+
+def set_price(x):
     db = wrds.Connection()
 
-    if global_:
-        g = "g_"
+    if x.global_:
+        g = "Global"
         entete = ['gvkey', 'datadate', 'conm', 'ajexdi', 'cshoc',
                   'cshtrd', 'prccd', 'prchd', 'prcld', 'curcdd',
                   'fic', 'isin']
     else:
-        g = ""
+        g = "north America"
         entete = ['gvkey', 'datadate', 'conm', 'ajexdi', 'cshoc',
                   'cshtrd', 'prccd', 'prchd', 'prcld', 'curcdd',
                   'fic', 'cusip']
 
-    count = db.get_row_count(library=library,
-                             table=table)
-    db.close()
 
-    obs_ = 100000
-    count = 100000
-    iter_ = int(np.round(count / obs_))
 
-    if iter_ * obs_ < count:
-        iter_ += 1
+    print('lot : [', x.offset, ", ", x.observation + x.offset,"]")
 
-    for i in range(iter_):
-        print('lot : [', i * obs_, ", ", (i + 1) * obs_, "]")
-
-        db = wrds.Connection()
-        res = db.get_table(library=library,
-                           table=table,
+    res = db.get_table(library=x.library,
+                           table=x.table,
                            columns=entete,
-                           obs=obs_,
-                           offset=i * obs_)
+                           obs=x.observation,
+                           offset= x.offset)
 
-        myclient = pymongo.MongoClient("mongodb://localhost:27017/")
+    myclient = pymongo.MongoClient("mongodb://localhost:27017/")
 
-        d = dict()
-        d_vol = dict()
-        d_prcld = dict()
-        d_prchd = dict()
+    d = dict()
+    d_vol = dict()
+    d_prcld = dict()
+    d_prchd = dict()
 
-        for pos in range(res.shape[0]):
+    for pos in range(res.shape[0]):
 
-            gvkey = res[entete[0]][pos]
-            date = res[entete[1]][pos]
-            date = str(date.year) + 'M' + str(date.month)
-            conm = res[entete[2]][pos]
-            ajex = test_value(res[entete[3]][pos], 1)
-            csho = test_value(res[entete[4]][pos], 0)
-            vol = test_value(res[entete[5]][pos], 0)
-            prccd = test_value(res[entete[6]][pos], 0)
-            prchd = test_value(res[entete[7]][pos], 0)
-            prcld = test_value(res[entete[8]][pos], 100000000)
-            curcdd = res[entete[9]][pos]
-            fic = res[entete[10]][pos]
-            isin = res[entete[11]][pos]
+        gvkey = res[entete[0]][pos]
+        date = res[entete[1]][pos]
+        date = str(date.year) + 'M' + str(date.month)
+        conm = res[entete[2]][pos]
+        ajex = test_value(res[entete[3]][pos], 1)
+        csho = test_value(res[entete[4]][pos], 0)
+        vol = test_value(res[entete[5]][pos], 0)
+        prccd = test_value(res[entete[6]][pos], 0)
+        prchd = test_value(res[entete[7]][pos], 0)
+        prcld = test_value(res[entete[8]][pos], 100000000)
+        curcdd = res[entete[9]][pos]
+        fic = res[entete[10]][pos]
+        isin = res[entete[11]][pos]
 
-            if d_vol.get((date, isin), False):
-                d_vol[(date, isin)] += vol
-            else:
-                d_vol[(date, isin)] = vol
+        if d_vol.get((date, isin), False):
+            d_vol[(date, isin)] += vol
+        else:
+            d_vol[(date, isin)] = vol
 
-            if d_prchd.get((date, isin), False):
-                d_prchd[(date, isin)] = max(d_prchd[(date, isin)], prchd)
-            else:
-                d_prchd[(date, isin)] = prchd
+        if d_prchd.get((date, isin), False):
+            d_prchd[(date, isin)] = max(d_prchd[(date, isin)], prchd)
+        else:
+            d_prchd[(date, isin)] = prchd
 
-            if d_prcld.get((date, isin), False):
-                d_prcld[(date, isin)] = min(d_prcld[(date, isin)], prcld)
-            else:
-                d_prcld[(date, isin)] = prcld
+        if d_prcld.get((date, isin), False):
+            d_prcld[(date, isin)] = min(d_prcld[(date, isin)], prcld)
+        else:
+            d_prcld[(date, isin)] = prcld
 
-            d[(date, isin)] = [gvkey, curcdd, csho, vol, ajex, prccd, prchd,
+        d[(date, isin)] = [gvkey, curcdd, csho, vol, ajex, prccd, prchd,
                                prcld, conm, fic]
 
-        for key in d:
+    for key in d:
 
-            date = key[0]
-            isin = key[1]
+        date = key[0]
+        isin = key[1]
 
-            gvkey = d[key][0]
-            curcdd = d[key][1]
-            csho = d[key][2]
-            vol = d[key][3]
-            ajex = d[key][4]
-            prccd = d[key][5]
-            prchd = d[key][6]
-            prcld = d[key][7]
+        gvkey = d[key][0]
+        curcdd = d[key][1]
+        csho = d[key][2]
+        vol = d[key][3]
+        ajex = d[key][4]
+        prccd = d[key][5]
+        prchd = d[key][6]
+        prcld = d[key][7]
 
-            #if global_ == False:
-            #    info = sif(gvkey, d[key][8], d[key][9], None, None, None, None, None, [{}])
-            #    info_to_add = st_sif(mydb, info.get_info())
-            #    info_to_add.add_stock_infos()
+        if x.global_ == False:
+            info = sif(gvkey, d[key][8], d[key][9], None, None, None, None, None, [{}])
+            mydb = myclient["stocks_infos"]
+            info_to_add = st_sif(mydb, info.get_info())
+            info_to_add.add_stock_infos()
 
-            data = sdt(gvkey, date, isin, curcdd, csho, vol, ajex,
+        data = sdt(gvkey, date, isin, curcdd, csho, vol, ajex,
                        prccd, prchd, prcld, 0, 0, 0, {}, [])
 
-            mydb = myclient["stocks_"+date]
-            data_to_add = st_sdt(mydb, data.get_info())
-            data_to_add.add_stock_data()
+        mydb = myclient["stocks_"+date]
+        data_to_add = st_sdt(mydb, data.get_info())
+        data_to_add.add_stock_data()
 
-        myclient.close()
+    myclient.close()
 
-        db.close()
+    db.close()
+
+    return 'lot : [', x.offset, ", ", x.observation + x.offset,"] Completed" + g
 
     ##set_table_basic_info(global_ = True)
 

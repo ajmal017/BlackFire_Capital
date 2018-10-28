@@ -45,6 +45,8 @@ def set_table_basic_info(x):
     mydb = myclient["stocks_infos"]
     res = db.get_table(library="comp", table=g + "security")
 
+    db.close()
+
     for pos in range(res.shape[0]):
 
         ticker = res['tic'][pos]
@@ -100,7 +102,7 @@ def set_table_basic_info(x):
         info_to_add.add_stock_infos()
 
     myclient.close()
-    db.close()
+
 
     return global_ + " Infos completed"
 

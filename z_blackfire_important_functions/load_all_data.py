@@ -33,7 +33,6 @@ price_target_tup = collections.namedtuple('price_target_tup',[
 ])
 
 class set_stocks_data_in_db():
-    
     def __init__(self, data):
         self.data = data
 
@@ -48,31 +47,30 @@ class set_stocks_data_in_db():
 
     def set_all_price(data):
 
-        #db = wrds.Connection()
-        #count = db.get_row_count(library="comp",
-        #                         table="g_secd")
-        #db.close()
-        #count = 1000000
-        #observ = 500000
-        #iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
-        #pt = ()
-        #for v in range(iter):
-        #    pt += price_tup(library='comp',
-        #                    table='g_secd',
-        #                    observation=observ,
-        #                    offset=v * observ,
-        #                    global_=True),
-        #pool = multiprocessing.Pool()
-        #result = pool.map(set_price, pt)
-        #print(result)
+        db = wrds.Connection()
+        count = db.get_row_count(library="comp",
+                                 table="g_secd")
+        db.close()
+
+        observ = 1000000
+        iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
+        pt = ()
+        for v in range(iter):
+            pt += price_tup(library='comp',
+                            table='g_secd',
+                            observation=observ,
+                            offset=v * observ,
+                            global_=True),
+        pool = multiprocessing.Pool(processes=2)
+        result = pool.map(set_price, pt)
+        print(result)
 
         db = wrds.Connection()
         count = db.get_row_count(library="comp",
                                  table="secd")
         db.close()
 
-        observ = 500000
-        count = 1000000
+        observ = 1000000
         iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
         pt = ()
         for v in range(iter):
@@ -81,7 +79,7 @@ class set_stocks_data_in_db():
                             observation=observ,
                             offset=v * observ,
                             global_=False),
-        pool = multiprocessing.Pool()
+        pool = multiprocessing.Pool(processes=2)
         result = pool.map(set_price, pt)
         print(result)
 
@@ -100,7 +98,7 @@ class set_stocks_data_in_db():
                                 table='ptgdet',
                                 observation=observ,
                                 offset=v * observ,),
-        pool = multiprocessing.Pool()
+        pool = multiprocessing.Pool(processes= 8)
         result = pool.map(set_price_target, pt)
         print(result)
 
@@ -108,23 +106,7 @@ class set_stocks_data_in_db():
 
     def set_all_consensus(data):
         print('consensus')
-        db = wrds.Connection()
-        count = db.get_row_count(library="ibes",
-                                 table="recddet")
-        db.close()
-
-        observ = 500000
-        iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
-        pt = ()
-        iter = 1
-        for v in range(iter):
-            pt += price_target_tup(library='ibes',
-                                   table='recddet',
-                                   observation=observ,
-                                   offset=v * observ, ),
-        pool = multiprocessing.Pool()
-        result = pool.map(set_consensus, pt)
-        print(result)
+        set_consensus()
 
     def set_all_currency(data):
         print('set currency')
@@ -133,7 +115,7 @@ class set_stocks_data_in_db():
         #curr_db.set_currency_euro()
 
 import collections
-a = set_stocks_data_in_db('')
+#a = set_stocks_data_in_db('')
 #a.set_all_infos()
 #a.set_all_currency()
 #a.set_all_price_target()
@@ -156,14 +138,8 @@ from bson import ObjectId
 
 
 
-
-
 if __name__ == '__main__':
-
-    #set_stocks_data_in_db('').set_all_infos()
-    #set_stocks_data_in_db('').set_all_price()
-    #set_stocks_data_in_db('').set_all_currency()
-    set_stocks_data_in_db('').set_all_consensus()
+    set_stocks_data_in_db('').set_all_price()
 
 
 

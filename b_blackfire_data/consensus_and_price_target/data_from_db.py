@@ -6,6 +6,7 @@ Created on Sun Oct 21 20:52:58 2018
 """
 import pymongo
 
+
 class price_target():
 
     def __init__(self, database, *data, **query):

@@ -28,7 +28,7 @@ def test_value(value, v):
 def set_price_target(x):
 
     entete = ['ticker', 'cusip', 'cname', 'estimid', 'horizon', 'value',
-              'estcur', 'anndats']
+              'estcur', 'anndats','amaskcd']
 
 
 
@@ -38,11 +38,13 @@ def set_price_target(x):
 
     db = wrds.Connection()
 
-    res = db.get_table(library= x.library,
-                           table= x.table,
-                           columns=entete,
-                           obs=x.observation,
-                           offset= x.offset)
+    #res = db.get_table(library= x.library,
+    #                       table= x.table,
+    #                       columns=entete,
+    #                       obs=x.observation,
+    #                       offset= x.offset)
+    res = db.raw_sql("select a.ticker, a.cusip, a.cname, a.estimid, a.horizon, a.value, " +
+                     "a.estcur, a.anndats, a.amaskcd from ibes.ptgdet a where a.cusip = '45920010'")
 
     myclient = pymongo.MongoClient("mongodb://localhost:27017/")
 
@@ -56,9 +58,10 @@ def set_price_target(x):
         value = res[entete[5]][pos]
         cur = res[entete[6]][pos]
         date = res[entete[7]][pos]
+        mask_code = res[entete[8]][pos]
         if cusip == None:
             cusip = tic
-        pt = spt(cusip, tic, cname, estim, value, hor, cur, date)
+        pt = spt(cusip, tic, cname, estim, value, hor, cur, date, mask_code)
         t = pt_db(myclient, pt.get_info())
         t.add_price_target()
 
@@ -69,52 +72,49 @@ def set_price_target(x):
     return 'lot : [', x.offset, ", ", x.observation + x.offset,"] Price target Completed"
 
 
-def set_consensus():
-    db = wrds.Connection()
+def set_consensus(x):
 
     entete = ['ticker', 'cusip', 'cname', 'estimid', 'ireccd',
-              'anndats']
+              'anndats','amaskcd']
 
-    count = db.get_row_count(library="ibes",
-                             table="recddet")
+    query = ''
+
+    for word in entete:
+        query += 'a.'+word+','
+
+    query = query[:-1]
+    print('lot : [', x.offset, ", ", x.offset + x.observation, "]")
+
+    db = wrds.Connection()
+
+    #res = db.get_table(library= x.library,
+    #                       table= x.table,
+    #                       columns=entete,
+    #                       obs=x.observation,
+    #                       offset= x.offset)
+
+    res = db.raw_sql("select " + query + " from ibes.recddet a where a.cusip = '45920010'")
+
+    myclient = pymongo.MongoClient("mongodb://localhost:27017/")
+
+    for pos in range(res.shape[0]):
+
+        tic = res[entete[0]][pos]
+        cusip = res[entete[1]][pos]
+        cname = res[entete[2]][pos]
+        estim = res[entete[3]][pos]
+        value = res[entete[4]][pos]
+        date = res[entete[5]][pos]
+        mask_code = res[entete[6]][pos]
+        if cusip == None:
+            cusip = tic
+        cs = scs(cusip,tic,cname,estim,value,date,mask_code)
+        c = cs_db(myclient, cs.get_info())
+        c.add_consensus()
+
+    myclient.close()
 
     db.close()
 
-    obs_ = 100000
-    count = 100000
-    iter_ = int(np.round(count / obs_))
+    return 'lot : [', x.offset, ", ", x.observation + x.offset,"] Consensus Completed"
 
-    if iter_ * obs_ < count:
-        iter_ += 1
-
-    for i in range(iter_):
-        print('lot : [', i * obs_, ", ", (i + 1) * obs_, "]")
-
-        db = wrds.Connection()
-
-        res = db.get_table(library="ibes",
-                           table="ptgdet",
-                           columns=entete,
-                           obs=obs_,
-                           offset=i * obs_)
-
-        myclient = pymongo.MongoClient("mongodb://localhost:27017/")
-
-        for pos in range(res.shape[0]):
-
-            tic = res[entete[0]][pos]
-            cusip = res[entete[1]][pos]
-            cname = res[entete[2]][pos]
-            estim = res[entete[3]][pos]
-            value = res[entete[4]][pos]
-            date = res[entete[5]][pos]
-
-            if cusip == None:
-                cusip = tic
-            pt = scs(cusip, tic, cname, estim, value, date)
-            c = cs_db(myclient, pt.get_info())
-            c.add_consensus()
-
-        myclient.close()
-
-        db.close()

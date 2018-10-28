@@ -33,6 +33,7 @@ price_target_tup = collections.namedtuple('price_target_tup',[
 ])
 
 class set_stocks_data_in_db():
+    
     def __init__(self, data):
         self.data = data
 
@@ -47,23 +48,23 @@ class set_stocks_data_in_db():
 
     def set_all_price(data):
 
-        db = wrds.Connection()
-        count = db.get_row_count(library="comp",
-                                 table="g_secd")
-        db.close()
-
-        observ = 500000
-        iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
-        pt = ()
-        for v in range(iter):
-            pt += price_tup(library='comp',
-                            table='g_secd',
-                            observation=observ,
-                            offset=v * observ,
-                            global_=True),
-        pool = multiprocessing.Pool()
-        result = pool.map(set_price, pt)
-        print(result)
+        #db = wrds.Connection()
+        #count = db.get_row_count(library="comp",
+        #                         table="g_secd")
+        #db.close()
+        #count = 1000000
+        #observ = 500000
+        #iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
+        #pt = ()
+        #for v in range(iter):
+        #    pt += price_tup(library='comp',
+        #                    table='g_secd',
+        #                    observation=observ,
+        #                    offset=v * observ,
+        #                    global_=True),
+        #pool = multiprocessing.Pool()
+        #result = pool.map(set_price, pt)
+        #print(result)
 
         db = wrds.Connection()
         count = db.get_row_count(library="comp",
@@ -71,6 +72,7 @@ class set_stocks_data_in_db():
         db.close()
 
         observ = 500000
+        count = 1000000
         iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
         pt = ()
         for v in range(iter):
@@ -106,7 +108,23 @@ class set_stocks_data_in_db():
 
     def set_all_consensus(data):
         print('consensus')
-        set_consensus()
+        db = wrds.Connection()
+        count = db.get_row_count(library="ibes",
+                                 table="recddet")
+        db.close()
+
+        observ = 500000
+        iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
+        pt = ()
+        iter = 1
+        for v in range(iter):
+            pt += price_target_tup(library='ibes',
+                                   table='recddet',
+                                   observation=observ,
+                                   offset=v * observ, ),
+        pool = multiprocessing.Pool()
+        result = pool.map(set_consensus, pt)
+        print(result)
 
     def set_all_currency(data):
         print('set currency')
@@ -139,8 +157,13 @@ from bson import ObjectId
 
 
 
+
 if __name__ == '__main__':
-    set_stocks_data_in_db('').set_all_price()
+
+    #set_stocks_data_in_db('').set_all_infos()
+    #set_stocks_data_in_db('').set_all_price()
+    #set_stocks_data_in_db('').set_all_currency()
+    set_stocks_data_in_db('').set_all_consensus()
 
 
 

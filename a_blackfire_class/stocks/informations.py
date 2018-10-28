@@ -95,44 +95,46 @@ class stocks_data:
 
 
 class stocks_consensus:
-    
-    def __init__(self, cusip, tic,conm,analyst, value, date):
-        
+
+    def __init__(self, cusip, tic, conm, analyst, recom, date, mask_code):
         self.cusip = cusip
-        self.tic =tic
+        self.tic = tic
         self.conm = conm
         self.analyst = analyst
-        self.price_target = price_target
+        self.recom = recom
         self.date = date
-    
+        self.mask_code = str(int(mask_code))
+
     def get_info(x):
-        
         d = dict()
         d_ = dict()
-        d['_id'] = x.analyst
-        d['price'] = x.price_target
+        d['cusip'] = x.cusip
+        d['ticker'] = x.tic
+        d['analyst'] = x.analyst
+        d['recom'] = (int(x.recom) - 3)/3
         d['date_activate'] = x.date
-        
+        d['mask_code'] = x.mask_code
+        d['variation'] = 0
+
         d_['_id'] = x.cusip
         d_['ticker'] = x.tic
         d_['conm'] = x.conm
-        return [d_,d]
+        return [d_, d]
 
 class price_target:
-    
-    def __init__(self, cusip, tic,conm,analyst, price_target, horizon, currency, date):
-        
+
+    def __init__(self, cusip, tic, conm, analyst, price_target, horizon, currency, date, mask_code):
         self.cusip = cusip
-        self.tic =tic
+        self.tic = tic
         self.conm = conm
         self.analyst = analyst
         self.price_target = price_target
         self.horizon = horizon
         self.currency = currency
         self.date = date
-    
+        self.mask_code = str(int(mask_code))
+
     def get_info(x):
-        
         d = dict()
         d_ = dict()
         d['cusip'] = x.cusip
@@ -142,11 +144,13 @@ class price_target:
         d['horizon'] = x.horizon
         d['curr'] = x.currency
         d['date_activate'] = x.date
-        
+        d['mask_code'] = x.mask_code
+        d['variation'] = 0
+
         d_['_id'] = x.cusip
         d_['ticker'] = x.tic
         d_['conm'] = x.conm
-        return [d_,d]
+        return [d_, d]
 
 class stocks:
     

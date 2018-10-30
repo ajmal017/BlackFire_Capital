@@ -162,8 +162,8 @@ if __name__ == '__main__':
 
     #set_stocks_data_in_db('').set_all_infos()
     #set_stocks_data_in_db('').set_all_price()
-    #set_stocks_data_in_db('').set_all_currency()
-    set_stocks_data_in_db('').set_all_consensus()
+    set_stocks_data_in_db('').set_all_currency()
+    #set_stocks_data_in_db('').set_all_consensus()
 
 
 

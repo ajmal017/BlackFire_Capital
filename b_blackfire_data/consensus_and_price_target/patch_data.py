@@ -119,7 +119,7 @@ def patch_consensus():
                     pt_db_a.update_one({'_id': actual_value['_id']}, newactualvalue)
 
 #patch_price_target()
-patch_consensus()
+#patch_consensus()
 myclient = pymongo.MongoClient("mongodb://localhost:27017/")
 d = ['admin', 'config', 'local']
 #for x in myclient.list_database_names():
@@ -139,15 +139,15 @@ for per in tab_date:
     mask_code = '128849'
     myquery = {"cusip": cusip, 'analyst': 'MORGAN'}
 
-    to_display = {'price':1,'date_activate':1, 'variation':1,'_id':0, 'mask_code':1, 'analyst':1}
+    #to_display = {'price':1,'date_activate':1, 'variation':1,'_id':0, 'mask_code':1, 'analyst':1}
     by = 'price'
-    x = pt_db.find(myquery, to_display).sort(by, 1)
+    x = pt_db.find(myquery).sort(by, 1)
     print(per)
     for v in x:
         print(v)
-    to_display = {'recom':1,'date_activate':1, 'variation':1,'_id':0, 'mask_code':1, 'analyst':1}
+    #to_display = {'recom':1,'date_activate':1, 'variation':1,'_id':0, 'mask_code':1, 'analyst':1}
     by = 'recom'
-    x = cs_db.find(myquery, to_display).sort(by, 1)
+    x = cs_db.find(myquery).sort(by, 1)
 
     for v in x:
         print(v)

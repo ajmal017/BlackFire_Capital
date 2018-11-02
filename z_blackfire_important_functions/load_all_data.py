@@ -8,6 +8,8 @@ from b_blackfire_data.stocks.stocks_data_from_wrds import set_table_basic_info
 from b_blackfire_data.stocks.stocks_data_from_wrds import set_price
 from b_blackfire_data.consensus_and_price_target.data_from_wrds import set_consensus
 from b_blackfire_data.consensus_and_price_target.data_from_wrds import set_price_target
+from b_blackfire_data.consensus_and_price_target.patch_data import patch_price_target
+from b_blackfire_data.consensus_and_price_target.patch_data import patch_consensus
 import b_blackfire_data.currency.data_from_db as curr_db
 import collections
 import multiprocessing
@@ -23,6 +25,7 @@ price_tup = collections.namedtuple('price_tup',[
     'observation',
     'offset',
     'global_',
+    'gvkey',
 ])
 
 price_target_tup = collections.namedtuple('price_target_tup',[
@@ -30,6 +33,11 @@ price_target_tup = collections.namedtuple('price_target_tup',[
     'library',
     'observation',
     'offset',
+    'ticker',
+])
+
+patch_ibes_tup = collections.namedtuple('patch_ibes_tup', [
+    'query',
 ])
 
 class set_stocks_data_in_db():
@@ -75,12 +83,14 @@ class set_stocks_data_in_db():
         count = 1000000
         iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
         pt = ()
-        for v in range(iter):
+        gvkey_t = ['014447', '101204', '015532']
+        for v in gvkey_t:
             pt += price_tup(library='comp',
                             table='secd',
                             observation=observ,
-                            offset=v * observ,
-                            global_=False),
+                            offset=1 * observ,
+                            global_=False,
+                            gvkey=v),
         pool = multiprocessing.Pool()
         result = pool.map(set_price, pt)
         print(result)
@@ -95,18 +105,20 @@ class set_stocks_data_in_db():
         observ = 500000
         iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
         pt = ()
-        for v in range(iter):
+        tab = ['@MOE', '@SQJ', '@BNP']
+        for v in tab:
             pt += price_target_tup(library='ibes',
-                                table='ptgdet',
-                                observation=observ,
-                                offset=v * observ,),
+                                   table='ptgdet',
+                                   observation=observ,
+                                   offset=observ,
+                                   ticker=v),
         pool = multiprocessing.Pool()
         result = pool.map(set_price_target, pt)
         print(result)
 
 
-
     def set_all_consensus(data):
+
         print('consensus')
         db = wrds.Connection()
         count = db.get_row_count(library="ibes",
@@ -117,11 +129,13 @@ class set_stocks_data_in_db():
         iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
         pt = ()
         iter = 1
-        for v in range(iter):
+        tab = ['@MOE', '@SQJ', '@BNP']
+        for v in tab:
             pt += price_target_tup(library='ibes',
-                                   table='recddet',
+                                   table='ptgdet',
                                    observation=observ,
-                                   offset=v * observ, ),
+                                   offset=observ,
+                                   ticker=v),
         pool = multiprocessing.Pool()
         result = pool.map(set_consensus, pt)
         print(result)
@@ -132,38 +146,36 @@ class set_stocks_data_in_db():
         #curr_db.set_currency_gbp()
         #curr_db.set_currency_euro()
 
-import collections
+    def patch_price_target_data(self):
+
+        tab = ['@MOE', '@SQJ', '@BNP']
+        pt = ()
+        for v in tab:
+            pt += patch_ibes_tup(query={'ticker': v}),
+        print(pt)
+        pool = multiprocessing.Pool()
+        pool.map(patch_price_target, pt)
+
+    def patch_consensus_data(self):
+
+        tab = ['@MOE', '@SQJ', '@BNP']
+        pt = ()
+        for v in tab:
+            pt += patch_ibes_tup(query={'ticker': v}),
+        print(pt)
+        pool = multiprocessing.Pool()
+        pool.map(patch_consensus, pt)
+
 a = set_stocks_data_in_db('')
-#a.set_all_infos()
-#a.set_all_currency()
-#a.set_all_price_target()
-# a.set_all_consensus()
-#a.set_all_price()
-import pymongo
-#import json
-from bson.json_util import dumps, CANONICAL_JSON_OPTIONS
-from bson import ObjectId
-
-#myclient = pymongo.MongoClient("mongodb://localhost:27017/")
-#a = myclient.list_database_names()
-#for x in a:
-#    print(x)
-
-#mydb = myclient["stocks_infos"].value
-#for x in mydb.find():
-#    print(x)
-#print(json.dumps(mydb.find_one(), indent=1))
-
-
-
-
 
 if __name__ == '__main__':
-
     #set_stocks_data_in_db('').set_all_infos()
     #set_stocks_data_in_db('').set_all_price()
-    set_stocks_data_in_db('').set_all_currency()
-    #set_stocks_data_in_db('').set_all_consensus()
+    #set_stocks_data_in_db('').set_all_currency()
+    set_stocks_data_in_db('').set_all_price_target()
+    set_stocks_data_in_db('').patch_price_target_data()
+    #set_stocks_data_in_db('').patch_consensus_data()
+
 
 
 

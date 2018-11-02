@@ -34,6 +34,13 @@ class price_target():
 
             date = str(data['date_activate'].year) + 'M' + \
                    str(data['date_activate'].month)
+
+            curr_db = self.database['currency'].USD
+            curr_db = curr_db[date]
+            curr_rate = curr_db.find_one(data['curr'])
+            curr_rate = curr_rate['rate']
+            data['price_usd'] = data['price']/curr_rate
+            
             pt = self.database["price_target_" + date].value
             data['date_activate'] = date + 'J' + str(data['date_activate'].day)
             try:

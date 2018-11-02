@@ -146,6 +146,7 @@ class price_target:
         d['date_activate'] = x.date
         d['mask_code'] = x.mask_code
         d['variation'] = 0
+        d['price_usd'] = 0
 
         d_['_id'] = x.cusip
         d_['ticker'] = x.tic

@@ -2,8 +2,28 @@ import pymongo
 from csv import reader
 import numpy as np
 import pandas as pd
+import collections
 
 myclient = pymongo.MongoClient("mongodb://localhost:27017/")
+
+set_sector_tuple = collections.namedtuple('set_sector_tuple', [
+    'naics',
+    'zone_eco',
+])
+
+def get_list_of_all_cusip(tab_cusip):
+    t = []
+    for infos in tab_cusip:
+
+        if infos['isin'] != None:
+            if infos['isin'][0:2] != 'US' and infos['isin'][0:2] != 'CA':
+                t.append(infos['isin'])
+            else:
+                t.append(infos['cusip'])
+        elif infos['cusip'] != None:
+            t.append(infos['cusip'])
+
+    return t
 
 def get_ibes(tab):
     pt_price = 0
@@ -82,7 +102,7 @@ def get_stocks_data():
 
     country_in_zone_eco = zone_eco_infos_db.find({'zone_eco': zone})
 
-    q = {'naics': {"$regex": "^"+naics}, 'eco zone': zone}
+    q = {'naics': {"$regex": "^" + naics}, 'eco zone': zone}
     stocks_in_zone = stocks_infos_db.find(q)
     tab_price_sector = []
     tab_ibes = []
@@ -115,7 +135,60 @@ def get_stocks_data():
     cs = ibes[0]
 
 
+def set_sector_data(x):
 
-mydb = myclient['stocks_infos'].value
-x = mydb.find()
-print(x.count())
+    naics = x.naics
+    zone_eco = x.zone_eco
+
+    stocks_infos_db = myclient['stocks_infos'].value
+    zone_query = {'naics': {"$regex": "^" + naics},'incorporation location': zone_eco}
+    stocks_in_zone = stocks_infos_db.find(zone_query)
+
+    tab_of_cusip = []
+    for stocks in stocks_in_zone:
+        print(stocks)
+        tab_of_cusip.append(get_list_of_all_cusip(stocks['stock identification']))
+
+
+    print(tab_of_cusip)
+    for date in ['2014M1']:
+
+        stocks_price_db = myclient['stocks_' + date].value
+        tab_consensus = []
+        tab_price_target = []
+        tab_price_sector = []
+
+        for list_cusip in tab_of_cusip:
+            tab_price = []
+            ibes = True
+            for cusip in list_cusip:
+                stocks_price = stocks_price_db.find_one({'_id': cusip})
+                if stocks_price is not None:
+                    tab_price.append([stocks_price ['csho'],
+                                     stocks_price['price_close']*stocks_price ['csho']/stocks_price ['curr_to_usd'],
+                                     stocks_price['vol']])
+                    if ibes:
+                        ibes = False
+                        tab_consensus.append(stocks_price['consensus'])
+                        tab_price_target.append(stocks_price['price_target'])
+
+            tab_price = np.array(tab_price)
+            if tab_price.shape[0] > 1:
+                mask = (tab_price[:, 1] == max(tab_price[:, 1]))
+                max_mc = tab_price[mask]
+                tab_price_sector.append(max_mc)
+
+        tab_price_sector = np.array(tab_price_sector)
+
+        if tab_price_sector.shape[0] != 0:
+
+            csho = sum(tab_price_sector[:,0])
+            price = sum(tab_price_sector[:,1])/sum(tab_price_sector[:,0])
+            vol = sum(tab_price_sector[:,2])
+
+
+
+
+x = set_sector_tuple('5221','FRA')
+set_sector_data(x)
+

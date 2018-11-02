@@ -44,9 +44,11 @@ def set_price_target(x):
     #                       obs=x.observation,
     #                       offset= x.offset)
     res = db.raw_sql("select a.ticker, a.cusip, a.cname, a.estimid, a.horizon, a.value, " +
-                     "a.estcur, a.anndats, a.amaskcd from ibes.ptgdet a where a.cusip = '45920010'")
+                     "a.estcur, a.anndats, a.amaskcd from ibes.ptgdet a where a.ticker = '" + x.ticker+"'")
 
     myclient = pymongo.MongoClient("mongodb://localhost:27017/")
+
+
 
     for pos in range(res.shape[0]):
 
@@ -93,7 +95,7 @@ def set_consensus(x):
     #                       obs=x.observation,
     #                       offset= x.offset)
 
-    res = db.raw_sql("select " + query + " from ibes.recddet a where a.cusip = '45920010'")
+    res = db.raw_sql("select " + query + " from ibes.recddet a where a.ticker = '" + x.ticker+"'")
 
     myclient = pymongo.MongoClient("mongodb://localhost:27017/")
 

@@ -121,16 +121,19 @@ def set_price(x):
                   'cshtrd', 'prccd', 'prchd', 'prcld', 'curcdd',
                   'fic', 'cusip']
 
-
-
+    query = ''
+    for word in entete:
+        query += 'a.'+word+','
+    query = query[:-1]
     print('lot : [', x.offset, ", ", x.observation + x.offset,"]")
 
-    res = db.get_table(library=x.library,
-                           table=x.table,
-                           columns=entete,
-                           obs=x.observation,
-                           offset= x.offset)
-
+    #res = db.get_table(library=x.library,
+    #                       table=x.table,
+    #                       columns=entete,
+    #                       obs=x.observation,
+    #                       offset= x.offset)
+    res = db.raw_sql("select " + query + " from "+
+                     x.library+"."+x.table+" a where a.gvkey = '" + x.gvkey+"'")
     myclient = pymongo.MongoClient("mongodb://localhost:27017/")
 
     d = dict()

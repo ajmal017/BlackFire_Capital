@@ -63,7 +63,7 @@ def get_mean_value(date, cursor, type):
             n_ += 1 if act_date != date else var
         if number != 0:
             var = 0 if n_ == 0 else var / n_
-            return {'price_usd': value / number, 'variation': var, 'number': number}
+            return {'price_usd': value / number, 'variation': var, 'number': number, 'num_var': n_}
         else:
             return None
     elif type == 'consensus':
@@ -76,7 +76,7 @@ def get_mean_value(date, cursor, type):
             n_ += 1 if act_date != date else var
         if number != 0:
             var = 0 if n_ == 0 else var / n_
-            return {'recom': recom / number, 'variation': var, 'number': number}
+            return {'recom': recom / number, 'variation': var, 'number': number, 'num_var': n_}
         else:
             return None
 

@@ -1,5 +1,5 @@
 """ This script will build some strategies base ont the sentiment in the market. As input, we """ + \
-    """have the stocks price, price target and consensus group by NAICS. The following strategy """+\
+    """have the StocksPriceData price, price target and consensus group by NAICS. The following strategy """+\
     """will be implemented.\n 1. Does WLD Naics can predict the NAICS that are the bestin position?"""+\
     """\n 2. Can the analyst predict the country where a NAICS will outprform?"""
 
@@ -61,7 +61,7 @@ def create_tab_of_stocks_sector():
                 sector = sector_zone.find_one({'_id': naics})
 
                 if sector is not None:
-                    price_info = sector['stocks']
+                    price_info = sector['StocksPriceData']
                     price_target_info = sector['price_target']
                     consensus_info = sector['consensus']
                 else:

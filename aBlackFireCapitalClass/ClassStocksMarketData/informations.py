@@ -5,14 +5,13 @@ Created on Sun Oct 14 21:14:06 2018
 @author: GhislainNoubissie
 """
 
+
 class stocks_infos:
-    
-    'This class create an object with the informations of all the stocks in the db'
-    
-    def __init__(self, gvkey,  company_name, incorporation_location,
+    'This class create an object with the informations of all the StocksPriceData in the db'
+
+    def __init__(self, gvkey, company_name, incorporation_location,
                  naics, sic, gic_sector, gic_ind, eco_zone,
                  stock_indentification):
-                        
         self.gvkey = gvkey
         self.company_name = company_name
         self.incorporation_location = incorporation_location
@@ -20,15 +19,14 @@ class stocks_infos:
         self.sic = sic
         self.gic_sector = gic_sector
         self.gic_ind = gic_ind
-        self.eco_zone = eco_zone       
+        self.eco_zone = eco_zone
         self.stock_indentification = stock_indentification
-        
+
     def get_info(x):
-        
         d = dict()
-        
+
         d['_id'] = x.gvkey
-        d['company name'] = x.company_name 
+        d['company name'] = x.company_name
         d['incorporation location'] = x.incorporation_location
         d['naics'] = x.naics
         d['sic'] = x.sic
@@ -36,22 +34,17 @@ class stocks_infos:
         d['gic ind'] = x.gic_ind
         d['eco zone'] = x.eco_zone
         d['stock identification'] = x.stock_indentification
-        
-            
+
         return d
-            
-            
+
 
 class stocks_data:
-    
-    'This class create an objet containing stocks information of a security in'
-    'a given month'
-    
-    def __init__(self, gvkey, date, cusip,curr, csho, vol, 
-                 adj_factor, price_close, 
-                 price_high, price_low, ret, ret_usd, 
-                 curr_to_usd,consensus_info, price_target_info):
-        
+    'This class create an objet containing StocksPriceData information of a security in a given month'
+
+    def __init__(self, gvkey, date, cusip, curr, csho, vol,
+                 adj_factor, price_close,
+                 price_high, price_low, ret, ret_usd,
+                 curr_to_usd, consensus_info, price_target_info):
         self.gvkey = gvkey
         self.cusip = cusip
         self.date = date
@@ -67,14 +60,10 @@ class stocks_data:
         self.curr_to_usd = curr_to_usd
         self.consensus_info = consensus_info
         self.price_target_info = price_target_info
-        
-        
-        
-        
+
     def get_info(x):
-        
-        d =dict()
-        
+        d = dict()
+
         d['_id'] = x.cusip
         d['gvkey'] = x.gvkey
         d['date'] = x.date
@@ -90,12 +79,11 @@ class stocks_data:
         d['curr_to_usd'] = x.curr_to_usd
         d['consensus'] = x.consensus_info
         d['price_target'] = x.price_target_info
-                        
+
         return {'date': x.date, "data": d}
 
 
 class stocks_consensus:
-
     def __init__(self, cusip, tic, conm, analyst, recom, date, mask_code):
         self.cusip = cusip
         self.tic = tic
@@ -111,18 +99,18 @@ class stocks_consensus:
         d['cusip'] = x.cusip
         d['ticker'] = x.tic
         d['analyst'] = x.analyst
-        d['recom'] = (int(x.recom) - 3)/3
+        d['recom'] = float(x.recom)
         d['date_activate'] = x.date
         d['mask_code'] = x.mask_code
-        d['variation'] = 0
+        d['variation'] = 0.0
 
         d_['_id'] = x.cusip
         d_['ticker'] = x.tic
         d_['conm'] = x.conm
         return [d_, d]
 
-class price_target:
 
+class price_target:
     def __init__(self, cusip, tic, conm, analyst, price_target, horizon, currency, date, mask_code):
         self.cusip = cusip
         self.tic = tic
@@ -153,15 +141,11 @@ class price_target:
         d_['conm'] = x.conm
         return [d_, d]
 
+
 class stocks:
-    
     def __init__(self, infos, data):
-        
         self.infos = infos
         self.data = data
-    
+
     def get_stocks(value):
-        
         return value
-    
-    

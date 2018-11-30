@@ -1,34 +1,17 @@
 import pymongo
 from csv import reader
 import numpy as np
-import pandas as pd
 import collections
+from aBlackFireCapitalClass.ClassSectorsMarketData.ClassSectorsMarketDataInfos import SectorsMarketDataInfos
+from aBlackFireCapitalClass.ClassStocksMarketData.ClassStocksMarketDataInfos import  StocksMarketDataInfos
+from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import GenerateMonthlyTab, ClientDB
 
-myclient = pymongo.MongoClient("mongodb://localhost:27017/")
-sector_infos_db = myclient['sector_infos']
+sector_db = ClientDB['sector']
 
 set_sector_tuple = collections.namedtuple('set_sector_tuple', [
     'naics',
     'zone_eco',
 ])
-
-
-def generate_month(start_date, end_date):
-    start_year = int(start_date[:4])
-    end_year = int(end_date[:4])
-    tab = []
-    b = False
-    for yr in range(start_year, end_year + 1):
-
-        for month in range(1, 13):
-            date = str(yr) + 'M' + str(month)
-            if date == start_date:
-                b = True
-            if b:
-                tab.append(date)
-            if date == end_date:
-                break
-    return tab
 
 
 def get_list_of_all_cusip(tab_cusip):
@@ -132,48 +115,33 @@ def return_price_and_ibes_for_sector(naics, zone_eco, stocks_infos_db, stocks_pr
     return get_mean_of_price_and_ibes_for_sector(tab_price_sector, tab_consensus, tab_price_target)
 
 
-def add_info():
-    file = open('naics_.csv', 'r')
-    file.readline()
-    for entete in file:
-
-        value = list(reader([entete]))[0]
-        level = value[0]
-        naics = value[2]
-        class_title = value[3]
-        scri = value[4]
-        class_definition = value[5]
-        if int(level) < 4 and scri != 'CAN':
-            sector_infos_db[level].insert_one({'_id': naics, 'title': class_title,
-                                               'description': class_definition})
-            print(level, naics, class_title)
-
-
 def set_sector_data(x):
 
     zone_eco = x.zone_eco
     level_naics = ['3', '2', '1']
 
     for level in level_naics:
-        print('level', level)
-        sector_infos_db_ = sector_infos_db[level]
 
-        for naics_infos in sector_infos_db_.find():
+        print('level', level)
+        """Find naics in a particular level"""
+        query = {'level': str(level)}
+        display = {'title': 0, 'description': 0, 'level': 0}
+        tab_naics = SectorsMarketDataInfos(sector_db['infos'], query, display).GetDataFromDB()
+
+        for naics_infos in tab_naics:
 
             naics = naics_infos['_id']  # naics in the level
-            print(naics)
-            stocks_infos_db = myclient['stocks_infos'].value
+
+            """Find All Stocks in a level for the Economic Zon"""
             zone_query = {'naics': {"$regex": "^" + naics}, 'eco zone': zone_eco}
-            stocks_in_zone = stocks_infos_db.find(zone_query)  # StocksPriceData list for naics
+            stocks_in_zone = StocksMarketDataInfos(ClientDB['stocks_infos'].value,
+                                                   zone_query,).GetDataFromDB()
 
-            level_inf = int(level) + 1
-            sector_infos_db_inf = sector_infos_db[str(level_inf)]
-            tab_naics_level_inf = []
+            level_inf = str(int(level) + 1)
+            query = {'level': str(level_inf), '_id': {"$regex": "^" + naics}}
+            display = {'title': 0, 'description': 0, 'level': 0}
+            tab_naics_level_inf = SectorsMarketDataInfos(sector_db['infos'], query, display).GetDataFromDB()
 
-            for value in sector_infos_db_inf.find({'_id': {"$regex": "^" + naics}}):
-                tab_naics_level_inf.append(str(value['_id']))  # naics of level inf
-
-            print('tab', tab_naics_level_inf)
             d = dict()
             for stocks in stocks_in_zone:
                 naics_inf = stocks['naics']

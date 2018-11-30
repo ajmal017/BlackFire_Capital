@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Thu Oct 18 20:07:09 2018
-
 @author: Utilisateur
 """
 import multiprocessing
@@ -244,7 +243,7 @@ def set_price(x):
 
 
 # =============================================================================
-# Start of the class    
+# Start of the class
 # =============================================================================
 class store_global_price():
     columns = ['gvkey', 'iid', 'curcdd', 'ajexdi', 'cshoc', 'cshtrd',
@@ -404,4 +403,3 @@ def get_world_stocks_price(file_name):
         print(stocks_dt.get_info())
         print('')
 
-# get_world_stocks_price('test.txt')

@@ -4,10 +4,19 @@ Created on Sun Oct 14 21:14:06 2018
 
 @author: GhislainNoubissie
 """
+import pandas as pd
 
+df2 = pd.DataFrame([[1,2,3,4,5]],
+                   columns=['a', 'b', 'c', 'd', 'e'])
+print(df2)
 
-class stocks_infos:
+class StocksMarketInfos:
     'This class create an object with the informations of all the StocksPriceData in the db'
+
+    #def __init__(self, database, *data):
+
+    #    self.database = database
+    #    self.data = data
 
     def __init__(self, gvkey, company_name, incorporation_location,
                  naics, sic, gic_sector, gic_ind, eco_zone,
@@ -21,6 +30,11 @@ class stocks_infos:
         self.gic_ind = gic_ind
         self.eco_zone = eco_zone
         self.stock_indentification = stock_indentification
+
+    def setDataInDB(self):
+
+        infos_db = self.database['value']
+    #def getDataFromDB(self):
 
     def get_info(x):
         d = dict()

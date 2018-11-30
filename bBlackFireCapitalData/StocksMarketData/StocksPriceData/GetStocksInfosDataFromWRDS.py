@@ -10,7 +10,7 @@ table = collections.namedtuple('table', [
 
 def GetStocksInfosData(parameter):
 
-    """parameter: library = comp, table, observation, offset."""
+    """parameter: library = comp, table= [names,], observation = int, offset = int, global=true/false."""
     db = wrds.Connection()
     myclient = pymongo.MongoClient("mongodb://localhost:27017/")
     mydb = myclient["stocks_infos"]

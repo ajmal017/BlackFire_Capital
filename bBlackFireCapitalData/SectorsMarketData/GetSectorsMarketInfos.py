@@ -1,8 +1,7 @@
 from csv import reader
 from aBlackFireCapitalClass.ClassSectorsMarketData.ClassSectorsMarketDataInfos import SectorsMarketDataInfos
-from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import GenerateTabMonth, ClientDB
+from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import ClientDB
 
-sector_db = ClientDB['sector']
 
 
 def SetSectorInfosInDB():
@@ -22,15 +21,10 @@ def SetSectorInfosInDB():
             data = {'_id': naics, 'title': class_title,
                      'description': class_definition,
                      'level': level}
-            SectorsMarketDataInfos(sector_db['infos'], data).SetDataInDB()
+            SectorsMarketDataInfos(ClientDB, data).SetDataInDB()
             print(level, naics, class_title)
 
     return
 
 ClientDB.close()
-#SetSectorInfosInDB()
 
-query = {}
-display = {'title':0, 'description':0}
-tab = SectorsMarketDataInfos(sector_db['infos'], query,display).GetDataFromDB()
-print(len(tab))

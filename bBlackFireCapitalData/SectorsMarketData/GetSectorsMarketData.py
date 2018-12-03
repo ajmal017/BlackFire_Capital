@@ -2,17 +2,86 @@ import pymongo
 from csv import reader
 import numpy as np
 import collections
+import re
 from aBlackFireCapitalClass.ClassSectorsMarketData.ClassSectorsMarketDataInfos import SectorsMarketDataInfos
 from aBlackFireCapitalClass.ClassStocksMarketData.ClassStocksMarketDataInfos import  StocksMarketDataInfos
 from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import GenerateMonthlyTab, ClientDB
 
-sector_db = ClientDB['sector']
+sector_db = ClientDB
 
 set_sector_tuple = collections.namedtuple('set_sector_tuple', [
     'naics',
     'zone_eco',
 ])
 
+
+def SetSectorConstituents():
+
+    """This function classify all the stocks within levels for each economic zone"""
+
+    level_naics = ['3', '2', '1']
+
+    for level in level_naics:
+
+        """Find naics in a particular level"""
+        query = {'level': str(level)}
+        display = {'title': 0, 'description': 0, 'level': 0}
+        tab_naics = SectorsMarketDataInfos(ClientDB, query, display).GetDataFromDB()
+
+        for naics_infos in tab_naics:
+
+            print('level', level,naics_infos)
+            naics = naics_infos['_id']  # naics in the level
+
+            """All Naics in sub level"""
+            level_inf = str(int(level) + 1)
+            query = {'level': str(level_inf), '_id': {"$regex": "^" + naics}}
+            display = {'title': 0, 'description': 0, 'level': 0}
+            tab_naics_level_inf = SectorsMarketDataInfos(ClientDB, query, display).GetDataFromDB()
+
+            query_naics_stock = [{'naics': {"$regex": "^" + naics}}]
+            for sub_naics in tab_naics_level_inf:
+                query_naics_stock.append({'naics': {"$not": re.compile("^" + sub_naics['_id'])}})
+            print(query_naics_stock)
+
+            """Find All Stocks in a level for the Economic Zone"""
+
+            for zone_eco in ['EUR']:
+
+                new_q = query_naics_stock.append({'eco zone': zone_eco})
+                stocks_in_zone = StocksMarketDataInfos(ClientDB, new_q, {}).GetDataFromDB()
+                tab_of_cusip = []
+
+                for stocks in stocks_in_zone:
+                    tab_of_cusip.append(get_list_of_all_cusip(stocks['stock identification']))
+
+
+
+
+
+
+
+
+
+SetSectorConstituents()
+
+query_not_in = {'naics': {'$nin': [{'naics': {"$regex": "^512"}}, {'naics': {"$regex": "^515"}}, {'naics': {"$regex": "^517"}}]}}
+
+query_not_in = {'naics': {'$nin': [{'naics': {"$regex": "^1"}}, {'naics': {"$regex": "^2"}}, {'naics': {"$regex": "^3"}}]}}
+query = {'level': '2', '_id': {"$regex": "^51"}}
+display = {'title': 0, 'description': 0, 'level': 0}
+#tab_naics_level_inf = SectorsMarketDataInfos(ClientDB, query, display).GetDataFromDB()
+#print(tab_naics_level_inf)
+
+query = {'$and': [
+                    {'_id': {"$regex": "^51"}, 'level': '2'},
+                    {'_id': {"$not": re.compile("^511")}, 'level': '2'},
+                    {'_id': {"$not": re.compile("^518")}, 'level': '2'}
+
+]
+        }
+#tab_naics_level_inf = SectorsMarketDataInfos(ClientDB, query, display).GetDataFromDB()
+#print(tab_naics_level_inf)
 
 def get_list_of_all_cusip(tab_cusip):
     t = []
@@ -113,6 +182,7 @@ def return_price_and_ibes_for_sector(naics, zone_eco, stocks_infos_db, stocks_pr
             tab_price_sector.append(max_mc)
 
     return get_mean_of_price_and_ibes_for_sector(tab_price_sector, tab_consensus, tab_price_target)
+
 
 
 def set_sector_data(x):

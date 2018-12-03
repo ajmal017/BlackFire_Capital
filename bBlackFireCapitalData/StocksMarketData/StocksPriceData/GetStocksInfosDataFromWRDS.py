@@ -1,44 +1,19 @@
+from aBlackFireCapitalClass.ClassStocksMarketData.ClassStocksMarketDataInfos import StocksMarketDataInfos
+from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import ClientDB
+
 __author__ = 'pougomg'
 import wrds
-import pymongo
 import numpy as np
-import collections
 
-table = collections.namedtuple('table', [
-    'value', "position",
-])
 
-def GetStocksInfosData(parameter):
+def SetStocksInfosDataInDB(parameter):
 
-    """parameter: library = comp, table= [names,], observation = int, offset = int, global=true/false."""
+    """parameter: library = comp, table= [security, names], observation = int, offset = int, globalWrds =true/false."""
     db = wrds.Connection()
-    myclient = pymongo.MongoClient("mongodb://localhost:27017/")
-    mydb = myclient["stocks_infos"]
+
     res = db.get_table(library=parameter.library,
-                       table=parameter.table,
-                       obs=parameter.observation,
-                       offset=parameter.offset)
-
-    res = res.values
-    count = res.shape[0]
-
-    def SetStocksInfosInDB(param):
-
-        table = param.table
-
-
+                       table=parameter.table[0])
     db.close()
-
-def set_table_basic_info(x):
-
-    if x.global_:
-        g = "g_"
-        global_ = "Global Infos"
-    else:
-        g = ""
-        global_ = 'North America'
-
-
 
     for pos in range(res.shape[0]):
 
@@ -69,34 +44,40 @@ def set_table_basic_info(x):
                      'exhg': exchg, 'excntry': excntry, 'isin': isin,
                      'secstat': secstat, 'sedol': sedol, 'tpci': tpci,
                      'cusip_8': cusip_8}]
-        a = sif(gvkey, None, None, None, None, None, None, None, stock_id)
 
-        info_to_add = st_sif(mydb, a.get_info())
-        info_to_add.add_stock_infos()
+        data = {'_id': gvkey, 'company name': None, 'incorporation location': None, 'naics': None,
+                'sic': None, 'gic sector': None,'gic ind': None, 'eco zone': None,
+                'stock identification': stock_id}
 
-    res = db.get_table(library="comp", table=g + "names")
+        StocksMarketDataInfos(ClientDB, data).SetDataInDB()
+
+    db = wrds.Connection()
+
+    res = db.get_table(library=parameter.library,
+                       table=parameter.table[1])
+    db.close()
 
     for pos in range(res.shape[0]):
 
         gvkey = res['gvkey'][pos]
         company = res['conm'][pos]
 
-        if x.global_:
+        if parameter.globalWrds:
             fic = res['fic'][pos]
         else:
             fic = None
         sic = res['sic'][pos]
         naics = res['naics'][pos]
 
-        stock_id = [{}]
-        a = sif(gvkey, company, fic, naics, sic, None, None, None, stock_id)
+        data = {'_id': gvkey, 'company name': company, 'incorporation location': fic, 'naics': naics,
+                'sic': sic, 'gic sector': None, 'gic ind': None, 'eco zone': None,
+                'stock identification': None}
 
-        info_to_add = st_sif(mydb, a.get_info())
-        info_to_add.add_stock_infos()
+        StocksMarketDataInfos(ClientDB, data).SetDataInDB()
 
-    myclient.close()
+    return (parameter.table, 'Completed')
 
 
-    return global_ + " Infos completed"
+
 
 

@@ -78,21 +78,7 @@ class stocks_data:
     def get_info(x):
         d = dict()
 
-        d['_id'] = x.cusip
-        d['gvkey'] = x.gvkey
-        d['date'] = x.date
-        d['curr'] = x.curr
-        d['csho'] = x.csho
-        d['vol'] = x.vol
-        d['adj_factor'] = x.adj_factor
-        d['price_close'] = x.price_close
-        d['price_high'] = x.price_high
-        d['price_low'] = x.price_low
-        d['ret'] = x.ret
-        d['ret_usd'] = x.ret_usd
-        d['curr_to_usd'] = x.curr_to_usd
-        d['consensus'] = x.consensus_info
-        d['price_target'] = x.price_target_info
+
 
         return {'date': x.date, "data": d}
 

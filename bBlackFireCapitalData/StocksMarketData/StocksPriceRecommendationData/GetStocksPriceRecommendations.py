@@ -15,7 +15,7 @@ from aBlackFireCapitalClass.ClassPriceRecommendationData.ClassPriceRecommendatio
 from aBlackFireCapitalClass.ClassPriceRecommendationData.ClassPriceRecommendationDataValues import \
     PriceTargetAndconsensusValuesData
 from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import type_consensus, type_price_target, ClientDB, \
-    secondary_processor
+    secondary_processor, GenerateMonthlyTab
 
 table = collections.namedtuple('table', [
     'value', "position", "type",
@@ -149,3 +149,72 @@ def ConvertPriceTagetToUSD(params):
                 price_usd = None
 
             PriceTargetAndconsensusValuesData(ClientDB, date,type_price_target,id,{'price_usd': price_usd}).UpdateValuesInDB()
+
+
+def PatchStocksPriceRecommendations(params):
+
+    """This function patch all the data for the Price Target and the Recommendations giver the horizon
+
+    """
+
+    cusip_query = params.query[0]
+    ticker_query = params.query[1]
+
+    tab_date = GenerateMonthlyTab("1984M1", "2018M12")
+
+    for per in range(1, len(tab_date)):
+
+        recommendationsPreviousYearData = PriceTargetAndconsensusValuesData(ClientDB, tab_date[per - 1], params.type,
+                                                         cusip_query, None).GetValuesFromDB()
+        if len(recommendationsPreviousYearData) == 0:
+            recommendationsPreviousYearData = PriceTargetAndconsensusValuesData(ClientDB, tab_date[per - 1], params.type, ticker_query,
+                                                             None).GetValuesFromDB()
+        for value in recommendationsPreviousYearData:
+
+            cusip = value['cusip']
+            tic = value['ticker']
+            mask_code = value['mask_code']
+            act_date = value['date_activate']
+            hor = int(value['horizon'])
+
+            if params.type == type_consensus:
+                previous = value['recom']
+            if params.type == type_price_target:
+                previous = value['price_usd']
+
+            newquery = {'cusip': cusip, 'mask_code': mask_code}
+            recommendationsActualYeardata = PriceTargetAndconsensusValuesData(ClientDB, tab_date[per], params.type,
+                                                         newquery, None).GetValuesFromDB()
+
+            if len(recommendationsActualYeardata) == 0:
+                newquery = {'ticker': tic, 'mask_code': mask_code}
+                recommendationsActualYeardata = PriceTargetAndconsensusValuesData(ClientDB, tab_date[per], params.type,
+                                                                                  newquery, None).GetValuesFromDB()
+
+            if len(recommendationsActualYeardata) == 0:
+                act = str(act_date.year) + 'M' + str(act_date.month)
+                act_date_pos = tab_date.index(act)
+
+                if per < act_date_pos + hor: #patch if current date < activate date + horizon
+                    PriceTargetAndconsensusValuesData(ClientDB,tab_date[per], params.type, value).SetValuesInDB()
+            else:
+
+                for actual_value in recommendationsActualYeardata: #if there is a new value don't patch and calculate variation of consensu
+
+                    if act_date != actual_value['date_activate']:
+                        if params.type == type_consensus:
+                            try:
+                                var = actual_value['recom'] - previous
+                            except TypeError:
+                                var = None
+
+                        if params.type == type_price_target:
+                            try:
+                                var = (actual_value['price_usd'] - previous) / previous
+                            except TypeError:
+                                var = None
+                            except ZeroDivisionError:
+                                var = None
+
+                        PriceTargetAndconsensusValuesData(ClientDB, tab_date[per], params.type,
+                                                              actual_value['_id'], {'$set': {"variation": var}})

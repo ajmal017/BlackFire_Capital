@@ -41,3 +41,9 @@ class PriceTargetAndconsensusInfosData:
         for value in self.database.find(query, display):
             tab.append(value)
         return tab
+
+    def UpdateInfosInDB(self):
+
+        id = self.data[0]
+        query = self.data[1]
+        self.database.update({"_id": id}, query)

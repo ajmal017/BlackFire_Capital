@@ -99,27 +99,6 @@ def get_mean_value(date, cursor, type):
             return None
 
 
-def set_new_value(actual, new, type):
-    #return {'recom': recom / number, 'variation': r, 'number': number, 'num_var': n_}
-    #return {'price_usd': value / number, 'variation': var, 'number': number, 'num_var': n_}
-
-    var = actual.get('variation', 0)
-    number = actual.get('number', 0)
-    num_var = actual.get('num_var', 0)
-
-    if type == "consensus":
-        recom = actual.get('recom', 0)
-        new['recom'] = (new['recom']*new["number"] + recom*number)/(new["number"] + number)
-        new["number"] = number + new["number"]
-        try:
-            new['var'] = (new['var']*new['num_var'] + var*num_var)/(num_var + new['num_var'])
-            new['num_var'] = num_var + new['num_var']
-        except ZeroDivisionError, TypeError:
-            new['var'] = 0
-            new['num_var'] = 0
-        return new
-
-    #if type == "price_target":
 
 def add_value_to_stocks_db(date, gvkey, query_ibes, type):
     ibes_db = myclient[type + "_" + date].value
@@ -165,7 +144,7 @@ def merge_stocks_with_ibes_cusip(x):
 
 
 
-
+#done!!!
 def merge_stocks_with_curr():
     tab_month = generate_month('2014M1', '2014M1')
     currency_us_db = myclient['currency'].USD

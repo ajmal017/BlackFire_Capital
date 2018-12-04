@@ -84,6 +84,67 @@ def TestNoneValue(value, v):
     return value
 
 
+def GetListOfAllCusip(tabOfDictStockID):
+    t = []
+    for infos in tabOfDictStockID:
+
+        if infos['isin'] != None:
+            if infos['isin'][0:2] != 'US' and infos['isin'][0:2] != 'CA':
+                t.append(infos['isin'])
+            else:
+                t.append(infos['cusip'])
+        elif infos['cusip'] != None:
+            t.append(infos['cusip'])
+
+    return t
+
+
+def GetMeanValueOfPriceRecommendationAgregation(date, cursor, type):
+    number = 0
+    n_ = 0
+    value = 0
+    recom = 0
+    var = 0
+
+    if type == type_price_target:
+        for v in cursor:
+
+            number += 1
+            value += v['price_usd']
+            act_date = v['date_activate'][:7]
+            act_date = act_date[:6] if act_date[-1] == 'J' else act_date
+
+            if act_date != date:
+                n_ += 1
+                var += float(v['variation'])
+
+        if number != 0:
+            var = 0 if n_ == 0 else var / n_
+            return {'price_usd': value / number, 'variation': var, 'number': number, 'num_var': n_}
+        else:
+            return None
+    elif type == type_consensus:
+        for v in cursor:
+
+            act_date = v['date_activate'][:7]
+            act_date = act_date[:6] if act_date[-1] == 'J' else act_date
+
+            number += 1
+            recom += float(v['recom'])
+            if act_date != date:
+                n_ += 1
+                var += float(v['variation'])
+        try:
+            r = var / n_
+        except ZeroDivisionError:
+            r = None
+
+        if number != 0:
+            return {'recom': recom / number, 'variation': r, 'number': number, 'num_var': n_}
+        else:
+            return None
+
+
 def GetMeanValueOfSectorAgregation(cursor):
 
 

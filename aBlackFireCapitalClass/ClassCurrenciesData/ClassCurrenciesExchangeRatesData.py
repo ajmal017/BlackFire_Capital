@@ -1,11 +1,12 @@
 import pymongo
+from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import CurrenciesExchangeRatesDBName
 
 
 class CurrenciesExchangeRatesData:
 
     def __init__(self, database, *data):
 
-        self.database = database['currency']['exchg_rates']
+        self.database = database[CurrenciesExchangeRatesDBName]['exchg_rates']
         self.data = data
 
     def __str__(self):
@@ -16,11 +17,13 @@ class CurrenciesExchangeRatesData:
 
     def SetExchangeRatesInDB(self):
 
-        """data = {'to', 'from', 'date', 'rate', '_id'(date + to)}"""
+        """data = {'to', 'from', 'date', 'rate', '_id'(to + date)}"""
 
         try:
             self.database.insert(self.data[0])
         except pymongo.errors.DuplicateKeyError:
+            if self.data[0]['date'] > (self.database.find_one({"_id":self.data[0]["_id"]}))["date"]:
+                self.database.update({"_id": self.data[0]["_id"]}, {"$set": self.data[0]})
             print('CurrenciesExchangeRatesData.SetExchangeRates.DuplicateKeyError', self.data[0]['_id'])
 
     def GetExchangeRatesFromDB(self):

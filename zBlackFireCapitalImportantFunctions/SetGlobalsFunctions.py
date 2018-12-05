@@ -1,12 +1,19 @@
 import pymongo
 import pandas as pd
 import numpy as np
+from mongobackup import backup, restore
+
 
 ClientDB = pymongo.MongoClient("mongodb://localhost:27017/")
-principal_processor = 2
+
+principal_processor = 16
 secondary_processor = 5
 type_consensus = 'consensus'
 type_price_target = 'price_target'
+
+"Database Name"
+CurrenciesExchangeRatesDBName = 'currency'
+
 country_zone_and_exchg = [['canada','CAN','CAD','7'], ['united states','USA','USD','11','12','14','17'],
            ['austria', 'AUT', 'EUR', '150', '273'],
            ['belgium','BEL', 'EUR', '132', '150', '161', '188', '285', '294'],
@@ -253,4 +260,18 @@ def GetMeanValueOfSectorAgregation(cursor):
              pt['ret'], pt['csho']]
         tab_value.append(t)
 
+def SetBackupOfDataBase(description):
 
+    backup("GhislainPougomNoubissie", "BlackFireCapitalIncFromBottomToTheTop", "/var/backups/mongo/",
+           attached_directory_path="/home/pougomg/Bureau/BlackFireCapitalBackup/",custom_prefix= description)
+
+
+
+def RestoreBackupOfdataBase(fileName):
+
+    restore("GhislainPougomNoubissie", "BlackFireCapitalIncFromBottomToTheTop", "/var/backups/mongo/"+fileName+".tbz")
+
+
+attached_directory_path="/home/pougomg/Bureau/BlackFireCapitalBackup/"
+local_backup_file = "/var/backups/mongo/"
+print(attached_directory_path + local_backup_file.split("/")[-1])

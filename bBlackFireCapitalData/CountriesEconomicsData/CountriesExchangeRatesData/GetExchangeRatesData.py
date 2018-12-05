@@ -19,7 +19,7 @@ def SetExchangeRatesCurrencyInDB(currency_from):
 
     if currency_from == 'USD':
 
-        entete = ['pubdats', 'exrat', 'curr']
+        entete = ['pubdats', 'curr', 'exrat']
 
         res = db.get_table(library="ibes",
                            columns=entete,
@@ -40,20 +40,21 @@ def SetExchangeRatesCurrencyInDB(currency_from):
                            table="g_exrt_mth")
 
     db.close()
-
-    for pos in range(5):
+    for pos in range(res.shape[0]):
         date = res[entete[0]][pos]
         date_str = str(date.year) + '-' + str(date.month) + '-' + str(date.day)
+        d = str(date.year) + 'M' + str(date.month)
         date = datetime.datetime.strptime(date_str, "%Y-%m-%d")
 
-        rate = res[entete[1]][pos]
-        to = res[entete[2]][pos]
+        to = res[entete[1]][pos]
+        rate = res[entete[2]][pos]
+
         """data = {'to', 'from', 'date', 'rate'}"""
-        data = {'from': currency_from, 'to': to, 'date': date, 'rate': rate, '_id':to + '_' + date_str, 'last_update': datetime.datetime.utcnow()}
+        data = {'from': currency_from, 'to': to, 'date': date, 'rate': rate, '_id':to + '_' + d}
         CurrenciesExchangeRatesData(ClientDB, data).SetExchangeRatesInDB()
+
     return
 
-#SetExchangeRatesCurrencyInDB('USD')
 
-
+ClientDB.close()
 # TODO: Create query to get the exchange rate for the last month.

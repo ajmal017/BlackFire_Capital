@@ -20,23 +20,4 @@ def SetCountriesEconomicsZonesForStocksInDB():
         for zone_eco in tab_zone_eco:
             StocksMarketDataInfos(ClientDB,stocksInfos['_id'], {'eco zone': zone_eco['eco zone']}).UpdateDataInDB()
 
-
-#SetCountriesEconomicsZonesInDB()
-#SetCountriesEconomicsZonesForStocksInDB()
-
-#for value in country:
-#    for st in value[3:]:
-#        d = {'exhg': st, 'excntry': value[1]}
-#        zone_eco.insert(d)
-
-#stocks_infos_db = myclient["stocks_infos"].value
-#zone_eco = zone_eco_db["zone_eco"]
-
-#for stocks in stocks_infos_db.find():
-
-#    id = stocks["_id"]
-#    inc = stocks["incorporation location"]
-#    v = zone_eco.find_one({"_id": inc})
-
-#    if v is not None:
-#        stocks_infos_db.update_one({'_id': id}, {"$set": {"eco zone": v["eco zone"]}})
+ClientDB.close()

@@ -3,6 +3,7 @@
 Created on Thu Oct 18 20:07:09 2018
 @author: Utilisateur
 """
+import mongobackup
 import multiprocessing
 import collections
 import pymongo
@@ -16,7 +17,6 @@ from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import ClientDB, se
 table = collections.namedtuple('table', [
     'value', "position", "globalWrds",
 ])
-
 
 def GetStocksPriceData(params):
 
@@ -142,13 +142,18 @@ def ConvertStocksPriceToUSD(params):
 
     date = params.date
     list_sp = StocksMarketDataPrice(ClientDB,date, {}, None).GetStocksPriceFromDB()
-
+    print(date)
     for stocks in list_sp:
 
         id = stocks['_id']
         curr = stocks['curr']
-        tab_rate = CurrenciesExchangeRatesData(ClientDB,{'from':'USD', 'to': curr, 'date': date}, None)\
-            .GetExchangeRatesEndofMonthFromDB()
+        try:
+            tab_rate = CurrenciesExchangeRatesData(ClientDB,{'from':'USD', '_id': curr + "_" + date}, None)\
+                .GetExchangeRatesFromDB()
 
-        for value in tab_rate:
-            StocksMarketDataPrice(ClientDB, date, id, {'curr_to_usd': 1/value['rate']}).UpdateStocksPriceInDB()
+            for value in tab_rate:
+                StocksMarketDataPrice(ClientDB, date, id, {'curr_to_usd': 1/value['rate']}).UpdateStocksPriceInDB()
+        except TypeError:
+            a = 0
+            # print("Curreny is None for ", stocks["_id"], date)
+

@@ -15,7 +15,8 @@ from bBlackFireCapitalData.StocksMarketData.StocksPriceData.GetStocksPriceDataFr
 from bBlackFireCapitalData.StocksMarketData.StocksPriceRecommendationData.GetStocksPriceRecommendations import \
     GetStocksPriceRecommendations, ConvertPriceTagetToUSD, PatchStocksPriceRecommendations
 from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import GenerateMonthlyTab, principal_processor, \
-    type_consensus, type_price_target, ClientDB
+    type_consensus, type_price_target, ClientDB, SetBackupOfDataBase, RestoreBackupOfdataBase, \
+    CurrenciesExchangeRatesDBName
 from aBlackFireCapitalClass.ClassPriceRecommendationData.ClassPriceRecommendationDataInfos import \
     PriceTargetAndconsensusInfosData
 
@@ -71,170 +72,175 @@ MergeStocksWithPriceRecommendationsParams = collections.namedtuple('MergeStocksW
 """This function set all the data inside the platforms"""
 
 
-"""1. Download of all the currency pair"""
-SetExchangeRatesCurrencyInDB(currency_from ='USD')
-SetExchangeRatesCurrencyInDB(currency_from='EUR')
-SetExchangeRatesCurrencyInDB(currency_from='GBP')
+# """1. Download of all the currency pair"""
+#SetExchangeRatesCurrencyInDB(currency_from='USD')
+#SetExchangeRatesCurrencyInDB(currency_from='EUR')
+#SetExchangeRatesCurrencyInDB(currency_from='GBP')
+#SetBackupOfDataBase(description)
+#RestoreBackupOfdataBase(fileName= "backup")
+#ClientDB.drop_database(CurrenciesExchangeRatesDBName)
+for c in ClientDB.database_names():
+    print(c)
 
-"""2. Download all the Stocks Infos """
-"""parameter: library = comp, table= [security, names], observation = int, offset = int, globalWrds =true/false."""
-params = StocksInfosParams(table='comp', library=['g_security', 'g_names'], globalWRDS=True)
-SetStocksInfosDataInDB(params)
+# """2. Download all the Stocks Infos """
+# """parameter: library = comp, table= [security, names], observation = int, offset = int, globalWrds =true/false."""
+# params = StocksInfosParams(table='comp', library=['g_security', 'g_names'], globalWRDS=True)
+# SetStocksInfosDataInDB(params)
+#
+# params = StocksInfosParams(table='comp', library=['security', 'names'], globalWRDS=False)
+# SetStocksInfosDataInDB(params)
+#
+# "3. Donwnload All Economics zones and add Zones to Stocks Infos"
+#SetCountriesEconomicsZonesInDB()
+#SetCountriesEconomicsZonesForStocksInDB()
 
-params = StocksInfosParams(table='comp', library=['security', 'names'], globalWRDS=False)
-SetStocksInfosDataInDB(params)
+# "4. Download Stock Price Data"
+#
+# db = wrds.Connection()
+# count = db.get_row_count(library="comp",
+#                          table="secd")
+# db.close()
+# observ = 1000000
+# iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
+# pt = ()
+# for v in range(iter):
+#    pt += StocksPriceParams(library='comp',
+#                             table='secd',
+#                             observation=observ,
+#                             offset=v * 1000000,
+#                             globalWRDS= False),
+# pool = MyPool(2)
+# result = pool.map(GetStocksPriceData, pt)
+# pool.close()
+# pool.join()
+# print(result)
+#
+# db = wrds.Connection()
+# count = db.get_row_count(library="g_comp",
+#                          table="g_secd")
+# db.close()
+# observ = 1000000
+# iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
+# pt = ()
+# for v in range(iter):
+#    pt += StocksPriceParams(library='g_comp',
+#                             table='g_secd',
+#                             observation=observ,
+#                             offset=v * 1000000,
+#                             globalWRDS= True),
+# pool = MyPool(2)
+# result = pool.map(GetStocksPriceData, pt)
+# pool.close()
+# pool.join()
+# print(result)
+#
+# "5. Set currency in the Stocks Price"
 
-"3. Donwnload All Economics zones and add Zones to Stocks Infos"
-SetCountriesEconomicsZonesInDB()
-SetCountriesEconomicsZonesForStocksInDB()
-
-"4. Download Stock Price Data"
-
-db = wrds.Connection()
-count = db.get_row_count(library="comp",
-                         table="secd")
-db.close()
-observ = 1000000
-iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
-pt = ()
-for v in range(iter):
-   pt += StocksPriceParams(library='comp',
-                            table='secd',
-                            observation=observ,
-                            offset=v * 1000000,
-                            globalWRDS= False),
-pool = MyPool(2)
-result = pool.map(GetStocksPriceData, pt)
-pool.close()
-pool.join()
-print(result)
-
-db = wrds.Connection()
-count = db.get_row_count(library="g_comp",
-                         table="g_secd")
-db.close()
-observ = 1000000
-iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
-pt = ()
-for v in range(iter):
-   pt += StocksPriceParams(library='g_comp',
-                            table='g_secd',
-                            observation=observ,
-                            offset=v * 1000000,
-                            globalWRDS= True),
-pool = MyPool(2)
-result = pool.map(GetStocksPriceData, pt)
-pool.close()
-pool.join()
-print(result)
-
-"5. Set currency in the Stocks Price"
-
-params = ()
-for month in GenerateMonthlyTab('1984M1', '2018M11'):
-    params += YearParams(date=month),
-
-pool = MyPool(principal_processor)
-result = pool.map(ConvertStocksPriceToUSD, params)
-pool.close()
-pool.join()
-
-"6. Set Price Target and Consensus Data"
-
-db = wrds.Connection()
-count = db.get_row_count(library="ibes",
-                         table="ptgdet")
-db.close()
-observ = 1000000
-iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
-pt = ()
-for v in range(iter):
-   pt += StocksRecommentdationsParams(library='ibes',
-                                      table='ptgdet',
-                                      observation=observ,
-                                      offset=v * 1000000,
-                                      type= type_price_target),
-pool = MyPool(2)
-result = pool.map(GetStocksPriceRecommendations, pt)
-pool.close()
-pool.join()
-print(result)
-
-db = wrds.Connection()
-count = db.get_row_count(library="ibes",
-                         table="recddet")
-db.close()
-observ = 1000000
-iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
-pt = ()
-for v in range(iter):
-   pt += StocksRecommentdationsParams(library='ibes',
-                                      table='recddet',
-                                      observation=observ,
-                                      offset=v * 1000000,
-                                      type= type_consensus),
-pool = MyPool(2)
-result = pool.map(GetStocksPriceRecommendations, pt)
-pool.close()
-pool.join()
-print(result)
-
-"7. Set all Price target to USD"
-params = ()
-for month in GenerateMonthlyTab('1984M1', '2018M11'):
-    params += YearParams(date=month),
-
-pool = MyPool(principal_processor)
-result = pool.map(ConvertPriceTagetToUSD, params)
-pool.close()
-pool.join()
-
-"8. Patch all PriceRecommendations Data"
-params = ()
-
-for value in PriceTargetAndconsensusInfosData(ClientDB,type_consensus, {}, {'_id':1, 'ticker':1}).GetInfosFromDB():
-    params += PatchStockPriceRecommendationsDataParams(type=type_consensus,
-                                                       query=[{"cusip": value['_id']}, {"ticker": value["ticker"]}]),
-
-pool = MyPool(principal_processor)
-result = pool.map(PatchStocksPriceRecommendations, params)
-pool.close()
-pool.join()
-
-params = ()
-
-for value in PriceTargetAndconsensusInfosData(ClientDB, type_price_target, {}, {'_id': 1, 'ticker': 1}).GetInfosFromDB():
-    params += PatchStockPriceRecommendationsDataParams(type=type_price_target,
-                                                       query=[{"cusip": value['_id']}, {"ticker": value["ticker"]}]),
-
-pool = MyPool(principal_processor)
-result = pool.map(PatchStocksPriceRecommendations, params)
-pool.close()
-pool.join()
-
-"9. Add Gvkey to StockPriceRecommendationsInfos"
-params = PatchStockPriceRecommendationsDataParams(type=type_consensus, query=0)
-SetGvkeyInStocksPriceRecoomendationsInfos(params)
-params = PatchStockPriceRecommendationsDataParams(type=type_price_target, query=0)
-SetGvkeyInStocksPriceRecoomendationsInfos(params)
-
-"10. Merge all Stocks Data"
-params = ()
-for month in GenerateMonthlyTab('1984M1', '2018M11'):
-    params += MergeStocksWithPriceRecommendationsParams(date=month, type=type_consensus),
-
-pool = MyPool(principal_processor)
-result = pool.map(MergeStocksWithPriceRecommendations, params)
-pool.close()
-pool.join()
-
-params = ()
-for month in GenerateMonthlyTab('1984M1', '2018M11'):
-    params += MergeStocksWithPriceRecommendationsParams(date=month, type=type_price_target),
-
-pool = MyPool(principal_processor)
-result = pool.map(MergeStocksWithPriceRecommendations, params)
-pool.close()
-pool.join()
+# params = ()
+# for month in GenerateMonthlyTab('1984M1', '2018M11'):
+#     params += YearParams(date=month),
+#
+# pool = MyPool(principal_processor)
+# result = pool.map(ConvertStocksPriceToUSD, params)
+# pool.close()
+# pool.join()
+#
+# "6. Set Price Target and Consensus Data"
+#
+# db = wrds.Connection()
+# count = db.get_row_count(library="ibes",
+#                          table="ptgdet")
+# db.close()
+# observ = 1000000
+# iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
+# pt = ()
+# for v in range(iter):
+#    pt += StocksRecommentdationsParams(library='ibes',
+#                                       table='ptgdet',
+#                                       observation=observ,
+#                                       offset=v * 1000000,
+#                                       type= type_price_target),
+# pool = MyPool(2)
+# result = pool.map(GetStocksPriceRecommendations, pt)
+# pool.close()
+# pool.join()
+# print(result)
+#
+# db = wrds.Connection()
+# count = db.get_row_count(library="ibes",
+#                          table="recddet")
+# db.close()
+# observ = 1000000
+# iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
+# pt = ()
+# for v in range(iter):
+#    pt += StocksRecommentdationsParams(library='ibes',
+#                                       table='recddet',
+#                                       observation=observ,
+#                                       offset=v * 1000000,
+#                                       type= type_consensus),
+# pool = MyPool(2)
+# result = pool.map(GetStocksPriceRecommendations, pt)
+# pool.close()
+# pool.join()
+# print(result)
+#
+# "7. Set all Price target to USD"
+# params = ()
+# for month in GenerateMonthlyTab('1984M1', '2018M11'):
+#     params += YearParams(date=month),
+#
+# pool = MyPool(principal_processor)
+# result = pool.map(ConvertPriceTagetToUSD, params)
+# pool.close()
+# pool.join()
+#
+# "8. Patch all PriceRecommendations Data"
+# params = ()
+#
+# for value in PriceTargetAndconsensusInfosData(ClientDB,type_consensus, {}, {'_id':1, 'ticker':1}).GetInfosFromDB():
+#     params += PatchStockPriceRecommendationsDataParams(type=type_consensus,
+#                                                        query=[{"cusip": value['_id']}, {"ticker": value["ticker"]}]),
+#
+# pool = MyPool(principal_processor)
+# result = pool.map(PatchStocksPriceRecommendations, params)
+# pool.close()
+# pool.join()
+#
+# params = ()
+#
+# for value in PriceTargetAndconsensusInfosData(ClientDB, type_price_target, {}, {'_id': 1, 'ticker': 1}).GetInfosFromDB():
+#     params += PatchStockPriceRecommendationsDataParams(type=type_price_target,
+#                                                        query=[{"cusip": value['_id']}, {"ticker": value["ticker"]}]),
+#
+# pool = MyPool(principal_processor)
+# result = pool.map(PatchStocksPriceRecommendations, params)
+# pool.close()
+# pool.join()
+#
+# "9. Add Gvkey to StockPriceRecommendationsInfos"
+# params = PatchStockPriceRecommendationsDataParams(type=type_consensus, query=0)
+# SetGvkeyInStocksPriceRecoomendationsInfos(params)
+# params = PatchStockPriceRecommendationsDataParams(type=type_price_target, query=0)
+# SetGvkeyInStocksPriceRecoomendationsInfos(params)
+#
+# "10. Merge all Stocks Data"
+# params = ()
+# for month in GenerateMonthlyTab('1984M1', '2018M11'):
+#     params += MergeStocksWithPriceRecommendationsParams(date=month, type=type_consensus),
+#
+# pool = MyPool(principal_processor)
+# result = pool.map(MergeStocksWithPriceRecommendations, params)
+# pool.close()
+# pool.join()
+#
+# params = ()
+# for month in GenerateMonthlyTab('1984M1', '2018M11'):
+#     params += MergeStocksWithPriceRecommendationsParams(date=month, type=type_price_target),
+#
+# pool = MyPool(principal_processor)
+# result = pool.map(MergeStocksWithPriceRecommendations, params)
+# pool.close()
+# pool.join()
 
 

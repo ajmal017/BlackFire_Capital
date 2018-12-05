@@ -1,11 +1,13 @@
 import pymongo
 
+from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import StocksMarketDataInfosDBName
+
 
 class StocksMarketDataInfos():
 
     def __init__(self, database, *data):
 
-        self.database = database['stocks_infos'].value
+        self.database = database[StocksMarketDataInfosDBName].value
         self.data = data
 
     def SetDataInDB(self):

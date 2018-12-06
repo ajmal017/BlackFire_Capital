@@ -8,7 +8,7 @@ from mongobackup import backup, restore
 #ClientDB['admin'].command("createUser", "GhislainPougomNoubissie", pwd="BlackFireCapitalIncFromBottomToTheTop", roles=["root"])
 
 principal_processor = 16
-secondary_processor = 5
+secondary_processor = 1
 type_consensus = 'consensus'
 type_price_target = 'price_target'
 

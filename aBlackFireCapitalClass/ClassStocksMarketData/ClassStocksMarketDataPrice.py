@@ -64,4 +64,5 @@ class StocksMarketDataPrice:
 
         id = self.data[0]
         newvalue = self.data[1]
+        print
         self.database.update_one({'_id': id}, {'$set': newvalue})

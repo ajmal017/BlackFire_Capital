@@ -1,5 +1,5 @@
+import pymongo
 from aBlackFireCapitalClass.ClassStocksMarketData.ClassStocksMarketDataInfos import StocksMarketDataInfos
-from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import ClientDB
 
 __author__ = 'pougomg'
 import wrds
@@ -10,10 +10,10 @@ def SetStocksInfosDataInDB(parameter):
 
     """parameter: library = comp, table= [security, names], observation = int, offset = int, globalWrds =true/false."""
     db = wrds.Connection()
-
     res = db.get_table(library=parameter.library,
                        table=parameter.table[0])
     db.close()
+    ClientDB = pymongo.MongoClient("mongodb://localhost:27017/")
 
     for pos in range(res.shape[0]):
 
@@ -62,7 +62,7 @@ def SetStocksInfosDataInDB(parameter):
         gvkey = res['gvkey'][pos]
         company = res['conm'][pos]
 
-        if parameter.globalWrds:
+        if parameter.globalWRDS:
             fic = res['fic'][pos]
         else:
             fic = None
@@ -72,12 +72,9 @@ def SetStocksInfosDataInDB(parameter):
         data = {'_id': gvkey, 'company name': company, 'incorporation location': fic, 'naics': naics,
                 'sic': sic, 'gic sector': None, 'gic ind': None, 'eco zone': None,
                 'stock identification': None}
-
         StocksMarketDataInfos(ClientDB, data).SetDataInDB()
 
     return (parameter.table, 'Completed')
 
-
-
-
+    ClientDB.close()
 

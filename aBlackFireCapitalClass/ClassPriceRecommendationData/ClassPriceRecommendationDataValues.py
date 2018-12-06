@@ -29,15 +29,16 @@ class PriceTargetAndconsensusValuesData:
         "'consensus': {'cusip', 'ticker', 'analyst', 'recom', "" \
         ""'horizon','date_activate','mask_code','variation'}"
         data = self.data[0]
-        myquery = {"cusip": data['cusip'], "mask_code": data['mask_code']}
+        self.database.insert_one(data)
+        # myquery = {"cusip": data['cusip'], "mask_code": data['mask_code']}
+        #
+        # value = self.database.find_one(myquery)
+        #
+        # if value is not None:
+        #     if data['date_activate'] > value['date_activate']:
+        #         self.database.update_one({'_id': value['_id']}, {'$set': data})
+        # else:
 
-        value = self.database.find_one(myquery)
-
-        if value is not None:
-            if data['date_activate'] > value['date_activate']:
-                self.database.update({'_id': value['_id']}, {'$set': {data}})
-        else:
-            self.database.insert_one(data)
 
     def GetValuesFromDB(self):
 

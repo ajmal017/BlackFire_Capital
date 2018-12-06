@@ -20,33 +20,36 @@ class StocksMarketDataInfos():
         except pymongo.errors.DuplicateKeyError:
 
             data = self.data[0]
-            value = self.database.find_one(data['_id'])
+            value = self.database.find_one({"_id": data['_id']})
 
-            if data['company name'] is None:
+            if data['company name'] is not None:
                 value['company name'] = data['company name']
 
-            if data['incorporation location'] is None:
+            if data['incorporation location'] is not None:
                 value['incorporation location'] = data['incorporation location']
 
-            if data['naics'] is None:
+            if data['naics'] is not None:
                 value['naics'] = data['naics']
 
-            if data['sic'] is None:
+            if data['sic'] is not None:
                 value['sic'] = data['sic']
 
-            if data['gic sector'] is None:
+            if data['gic sector'] is not None:
                 value['gic sector'] = data['gic sector']
 
-            if data['gic ind'] is None:
+            if data['gic ind'] is not None:
                 value['gic ind'] = data['gic ind']
 
-            if data['eco zone'] is None:
-                value['eco zone'] = data['eco zone']
+            if data['eco zone'] is not None:
+                value['eco zone'] = not data['eco zone']
 
             if data['stock identification'] is not None:
-                value['stock identification'] = value['stock identification'].append(data['stock identification'])
+                tab = [data['stock identification'][0]]
+                for v in value['stock identification']:
+                    tab.append(v)
+                value['stock identification'] = tab[:]
 
-            self.database.value.update({'_id': data['_id']}, {'$set': value})
+            self.database.update_one({'_id': data['_id']}, {'$set': value})
 
     def GetDataFromDB(self):
 
@@ -58,11 +61,8 @@ class StocksMarketDataInfos():
 
         return tab_of_result
 
-
-
-
     def UpdateDataInDB(self):
 
         id = self.data[0]
         value = self.data[1]
-        self.database.update({'_id': id}, {'$set': value})
+        self.database.update_one({'_id': id}, {'$set': value})

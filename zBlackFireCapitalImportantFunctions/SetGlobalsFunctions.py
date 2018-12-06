@@ -4,7 +4,6 @@ import numpy as np
 from mongobackup import backup, restore
 
 
-ClientDB = pymongo.MongoClient("mongodb://localhost:27017/")
 #ClientDB['admin'].add_user("GhislainPougomNoubissie", "BlackFireCapitalIncFromBottomToTheTop")
 #ClientDB['admin'].command("createUser", "GhislainPougomNoubissie", pwd="BlackFireCapitalIncFromBottomToTheTop", roles=["root"])
 
@@ -267,7 +266,7 @@ def GetMeanValueOfSectorAgregation(cursor):
 def SetBackupOfDataBase(description):
 
     backup("GhislainPougomNoubissie", "BlackFireCapitalIncFromBottomToTheTop", "/var/backups/mongo/",
-           attached_directory_path="C:/Users/Utilisateur/Desktop/BlackFireCapitalBackup/",custom_prefix=description)
+           attached_directory_path="/home/pougomg/Bureau/BlackFireCapitalBackup/",custom_prefix=description)
 
 
 

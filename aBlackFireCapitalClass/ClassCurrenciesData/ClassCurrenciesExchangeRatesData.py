@@ -23,7 +23,7 @@ class CurrenciesExchangeRatesData:
             self.database.insert(self.data[0])
         except pymongo.errors.DuplicateKeyError:
             if self.data[0]['date'] > (self.database.find_one({"_id":self.data[0]["_id"]}))["date"]:
-                self.database.update({"_id": self.data[0]["_id"]}, {"$set": self.data[0]})
+                self.database.update_one({"_id": self.data[0]["_id"]}, {"$set": self.data[0]})
             print('CurrenciesExchangeRatesData.SetExchangeRates.DuplicateKeyError', self.data[0]['_id'])
 
     def GetExchangeRatesFromDB(self):

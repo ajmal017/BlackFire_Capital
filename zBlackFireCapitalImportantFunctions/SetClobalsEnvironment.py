@@ -1,4 +1,5 @@
 import collections
+import pymongo
 import wrds
 import multiprocessing
 import multiprocessing.pool
@@ -15,7 +16,7 @@ from bBlackFireCapitalData.StocksMarketData.StocksPriceData.GetStocksPriceDataFr
 from bBlackFireCapitalData.StocksMarketData.StocksPriceRecommendationData.GetStocksPriceRecommendations import \
     GetStocksPriceRecommendations, ConvertPriceTagetToUSD, PatchStocksPriceRecommendations
 from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import GenerateMonthlyTab, principal_processor, \
-    type_consensus, type_price_target, ClientDB, SetBackupOfDataBase, RestoreBackupOfdataBase, \
+    type_consensus, type_price_target, SetBackupOfDataBase, RestoreBackupOfdataBase, \
     CurrenciesExchangeRatesDBName, StocksMarketDataInfosDBName
 from aBlackFireCapitalClass.ClassPriceRecommendationData.ClassPriceRecommendationDataInfos import \
     PriceTargetAndconsensusInfosData
@@ -68,38 +69,40 @@ MergeStocksWithPriceRecommendationsParams = collections.namedtuple('MergeStocksW
         'type',
         'date',
       ])
+ClientDB = pymongo.MongoClient("mongodb://localhost:27017/")
+
 
 """This function set all the data inside the platforms"""
+for name in ClientDB.database_names():
+    print(name)
+    if name[:13] == 'price_target_':
+        ClientDB.drop_database(name)
+        print('drop'+ name)
 
+ClientDB.close()
+# """1. Download of all the currency pair"""
+# SetExchangeRatesCurrencyInDB(currency_from='USD')
+# SetExchangeRatesCurrencyInDB(currency_from='EUR')
+# SetExchangeRatesCurrencyInDB(currency_from='GBP')
+#
+# description = 'BackupCreate' + CurrenciesExchangeRatesDBName
+# SetBackupOfDataBase(description)
+#
+# print("""2. Download all the Stocks Infos """)
+# """parameter: library = comp, table= [security, names], observation = int, offset = int, globalWrds =true/false."""
+# ClientDB.drop_database("stocks_infos")
+# params = StocksInfosParams(library='comp', table=['g_security', 'g_names'], globalWRDS=True)
+# SetStocksInfosDataInDB(params)
+# print("GLobal Completed")
+# params = StocksInfosParams(library='comp', table=['security', 'names'], globalWRDS=False)
+# SetStocksInfosDataInDB(params)
+# print("North America Completed")
+#
+# description = 'BackupCreate' + StocksMarketDataInfosDBName
+# SetBackupOfDataBase(description)
 
-"""1. Download of all the currency pair"""
-SetExchangeRatesCurrencyInDB(currency_from='USD')
-SetExchangeRatesCurrencyInDB(currency_from='EUR')
-SetExchangeRatesCurrencyInDB(currency_from='GBP')
-
-description = 'BackupCreate' + CurrenciesExchangeRatesDBName
-SetBackupOfDataBase(description)
-
-"""2. Download all the Stocks Infos """\
-"""parameter: library = comp, table= [security, names], observation = int, offset = int, globalWrds =true/false."""
-
-params = StocksInfosParams(table='comp', library=['g_security', 'g_names'], globalWRDS=True)
-SetStocksInfosDataInDB(params)
-params = StocksInfosParams(table='comp', library=['security', 'names'], globalWRDS=False)
-SetStocksInfosDataInDB(params)
-
-description = 'BackupCreate' + StocksMarketDataInfosDBName
-SetBackupOfDataBase(description)
-
-"3. Donwnload All Economics zones and add Zones to Stocks Infos"
-
-SetCountriesEconomicsZonesInDB()
-SetCountriesEconomicsZonesForStocksInDB()
-
-description = 'BackupCreate Zones and set Eco Zone for stocks'
-SetBackupOfDataBase(description)
-
-"4. Download Stock Price Data"
+# TODO
+"3. Download Stock Price Data"
 
 db = wrds.Connection()
 count = db.get_row_count(library="comp",
@@ -144,6 +147,17 @@ print(result)
 description = 'BackupCreate Stocks Price Global'
 SetBackupOfDataBase(description)
 
+#TODO
+print("4. Donwnload All Economics zones and add Zones to Stocks Infos")
+
+#SetCountriesEconomicsZonesInDB()
+SetCountriesEconomicsZonesForStocksInDB()
+
+description = 'BackupCreateZonesandsetEcoZoneforstocks'
+SetBackupOfDataBase(description)
+
+#TODO
+
 "5. Set currency in the Stocks Price"
 
 params = ()
@@ -157,57 +171,68 @@ pool.join()
 
 description = 'Backup Add Currency to the Stocks Price'
 SetBackupOfDataBase(description)
-#
-# "6. Set Price Target and Consensus Data"
-#
-# db = wrds.Connection()
-# count = db.get_row_count(library="ibes",
-#                          table="ptgdet")
-# db.close()
-# observ = 1000000
-# iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
-# pt = ()
-# for v in range(iter):
-#    pt += StocksRecommentdationsParams(library='ibes',
-#                                       table='ptgdet',
-#                                       observation=observ,
-#                                       offset=v * 1000000,
-#                                       type= type_price_target),
-# pool = MyPool(2)
-# result = pool.map(GetStocksPriceRecommendations, pt)
-# pool.close()
-# pool.join()
-# print(result)
-#
-# db = wrds.Connection()
-# count = db.get_row_count(library="ibes",
-#                          table="recddet")
-# db.close()
-# observ = 1000000
-# iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
-# pt = ()
-# for v in range(iter):
-#    pt += StocksRecommentdationsParams(library='ibes',
-#                                       table='recddet',
-#                                       observation=observ,
-#                                       offset=v * 1000000,
-#                                       type= type_consensus),
-# pool = MyPool(2)
-# result = pool.map(GetStocksPriceRecommendations, pt)
-# pool.close()
-# pool.join()
-# print(result)
-#
-# "7. Set all Price target to USD"
-# params = ()
-# for month in GenerateMonthlyTab('1984M1', '2018M11'):
-#     params += YearParams(date=month),
-#
-# pool = MyPool(principal_processor)
-# result = pool.map(ConvertPriceTagetToUSD, params)
-# pool.close()
-# pool.join()
-#
+
+print("6. Set Price Target and Consensus Data")
+
+
+db = wrds.Connection()
+count = db.get_row_count(library="ibes",
+                         table="ptgdet")
+db.close()
+print(count)
+observ = 1000000
+iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
+pt = ()
+for v in range(iter):
+   pt += StocksRecommentdationsParams(library='ibes',
+                                      table='ptgdet',
+                                      observation=observ,
+                                      offset=v * 1000000,
+                                      type= type_price_target),
+pool = MyPool(2)
+result = pool.map(GetStocksPriceRecommendations, pt)
+pool.close()
+pool.join()
+print(result)
+description = 'Backup_Download_Price_Target'
+print(description)
+SetBackupOfDataBase(description)
+
+db = wrds.Connection()
+count = db.get_row_count(library="ibes",
+                         table="recddet")
+db.close()
+observ = 1000000
+iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
+pt = ()
+for v in range(iter):
+   pt += StocksRecommentdationsParams(library='ibes',
+                                      table='recddet',
+                                      observation=observ,
+                                      offset=v * 1000000,
+                                      type= type_consensus),
+pool = MyPool(2)
+result = pool.map(GetStocksPriceRecommendations, pt)
+pool.close()
+pool.join()
+print(result)
+description = 'Backup_Download_Recommendation'
+print(description)
+
+SetBackupOfDataBase(description)
+
+"7. Set all Price target to USD"
+params = ()
+for month in GenerateMonthlyTab('1984M1', '2018M11'):
+    params += YearParams(date=month),
+
+pool = MyPool(principal_processor)
+result = pool.map(ConvertPriceTagetToUSD, params)
+pool.close()
+pool.join()
+description = 'Backup Add Currency to the Price Target'
+SetBackupOfDataBase(description)
+
 # "8. Patch all PriceRecommendations Data"
 # params = ()
 #

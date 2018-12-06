@@ -4,8 +4,7 @@ from aBlackFireCapitalClass.ClassPriceRecommendationData.ClassPriceRecommendatio
     PriceTargetAndconsensusValuesData
 from aBlackFireCapitalClass.ClassStocksMarketData.ClassStocksMarketDataInfos import StocksMarketDataInfos
 from aBlackFireCapitalClass.ClassStocksMarketData.ClassStocksMarketDataPrice import StocksMarketDataPrice
-from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import ClientDB, \
-    GetMeanValueOfPriceRecommendationAgregation
+from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import  GetMeanValueOfPriceRecommendationAgregation
 
 
 def SetGvkeyInStocksPriceRecoomendationsInfos(params):

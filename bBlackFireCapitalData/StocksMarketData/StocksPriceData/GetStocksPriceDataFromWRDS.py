@@ -12,7 +12,7 @@ import wrds
 from aBlackFireCapitalClass.ClassCurrenciesData.ClassCurrenciesExchangeRatesData import CurrenciesExchangeRatesData
 from aBlackFireCapitalClass.ClassStocksMarketData.ClassStocksMarketDataInfos import StocksMarketDataInfos
 from aBlackFireCapitalClass.ClassStocksMarketData.ClassStocksMarketDataPrice import StocksMarketDataPrice
-from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import ClientDB, secondary_processor, TestNoneValue
+from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import secondary_processor, TestNoneValue
 
 table = collections.namedtuple('table', [
     'value', "position", "globalWrds",
@@ -41,6 +41,8 @@ def GetStocksPriceData(params):
     db.close()
 
     def SetStockPriceDataInDB(params):
+
+        ClientDB = pymongo.MongoClient("mongodb://localhost:27017/")
 
         tab = params.value
         d = dict()
@@ -112,7 +114,7 @@ def GetStocksPriceData(params):
                     'curr_to_USD': None, 'consensus': {}, 'price_target': {}}
 
             StocksMarketDataPrice(ClientDB,date,data).SetStocksPriceInDB()
-
+        ClientDB.close()
         return 'lot : [', params.position, "] Completed"
 
     res = res.values
@@ -141,6 +143,8 @@ def GetStocksPriceData(params):
 def ConvertStocksPriceToUSD(params):
 
     date = params.date
+    ClientDB = pymongo.MongoClient("mongodb://localhost:27017/")
+
     list_sp = StocksMarketDataPrice(ClientDB,date, {}, None).GetStocksPriceFromDB()
     print(date)
     for stocks in list_sp:
@@ -157,3 +161,4 @@ def ConvertStocksPriceToUSD(params):
             a = 0
             # print("Curreny is None for ", stocks["_id"], date)
 
+    ClientDB.close()

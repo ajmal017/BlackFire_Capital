@@ -4,16 +4,18 @@ Created on Sun Oct 21 23:57:38 2018
 
 @author: Utilisateur
 """
+import pymongo
 import wrds
 import datetime
 from aBlackFireCapitalClass.ClassCurrenciesData.ClassCurrenciesExchangeRatesData import CurrenciesExchangeRatesData
-from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import ClientDB
 
 
 """This funstion set all the currency data from WRDS inside the MongoDB"""
 
 
 def SetExchangeRatesCurrencyInDB(currency_from):
+
+    ClientDB = pymongo.MongoClient("mongodb://localhost:27017/")
 
     db = wrds.Connection()
 
@@ -52,9 +54,9 @@ def SetExchangeRatesCurrencyInDB(currency_from):
         """data = {'to', 'from', 'date', 'rate'}"""
         data = {'from': currency_from, 'to': to, 'date': date, 'rate': rate, '_id':to + '_' + d}
         CurrenciesExchangeRatesData(ClientDB, data).SetExchangeRatesInDB()
+    ClientDB.close()
 
     return
 
 
-ClientDB.close()
 # TODO: Create query to get the exchange rate for the last month.

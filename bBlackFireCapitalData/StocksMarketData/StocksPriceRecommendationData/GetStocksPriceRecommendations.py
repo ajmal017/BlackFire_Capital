@@ -8,13 +8,13 @@ import wrds
 import datetime
 import multiprocessing
 import collections
-
+import pymongo
 from aBlackFireCapitalClass.ClassCurrenciesData.ClassCurrenciesExchangeRatesData import CurrenciesExchangeRatesData
 from aBlackFireCapitalClass.ClassPriceRecommendationData.ClassPriceRecommendationDataInfos import \
     PriceTargetAndconsensusInfosData
 from aBlackFireCapitalClass.ClassPriceRecommendationData.ClassPriceRecommendationDataValues import \
     PriceTargetAndconsensusValuesData
-from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import type_consensus, type_price_target, ClientDB, \
+from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import type_consensus, type_price_target, \
     secondary_processor, GenerateMonthlyTab
 
 table = collections.namedtuple('table', [
@@ -45,6 +45,8 @@ def GetStocksPriceRecommendations(params):
     def SetPriceRecommendationsInDB(params):
 
         tab = params.value
+        dict_infos = dict()
+        ClientDB = pymongo.MongoClient("mongodb://localhost:27017/")
 
         if params.type == type_price_target:
 
@@ -57,7 +59,7 @@ def GetStocksPriceRecommendations(params):
                 hor = res[4]
                 value = res[5]
                 cur = res[6]
-                date = res[71]
+                date = res[7]
                 mask_code = res[8]
                 if cusip == None:
                     cusip = tic
@@ -65,14 +67,23 @@ def GetStocksPriceRecommendations(params):
                 date_str = str(date.year) + '-' + str(date.month) + '-' + str(date.day)
                 d = str(date.year) + 'M' + str(date.month)
                 date = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+                data = {'_id': cusip, 'comn':cname, 'ticker':tic}
 
-                data =  {'_id': cusip, 'comn':cname, 'ticker':tic}
-                PriceTargetAndconsensusInfosData(ClientDB,params.type,data).SetInfosInDB()
+                dict_infos[(cusip, tic)] = data
 
-                data = {'cusip':cusip,'ticker':tic,'analyst':estim,'price':value,'horizon':hor
-                ,'curr':cur,'date_activate':date,'mask_code':mask_code,'variation':None,'price_usd':None}
+                if (cusip != tic):
+                    if dict_infos.get((tic, tic), False):
+                        del dict_infos[(tic, tic)]
+
+
+                data = {'cusip':cusip,'ticker': tic,'analyst':estim,'price':value,'horizon':hor,
+                        'curr':cur,'date_activate':date,'mask_code':mask_code,'variation':None,'price_usd':None}
 
                 PriceTargetAndconsensusValuesData(ClientDB,d,params.type,data).SetValuesInDB()
+
+            for key in dict_infos:
+                PriceTargetAndconsensusInfosData(ClientDB,params.type,dict_infos[key]).SetInfosInDB()
+
 
         if params.type == type_consensus:
 
@@ -102,6 +113,7 @@ def GetStocksPriceRecommendations(params):
 
                 PriceTargetAndconsensusValuesData(ClientDB, d, params.type, data).SetValuesInDB()
 
+        ClientDB.close()
         return 'lot : [', params.position, "] Completed"
 
     res = res.values
@@ -130,6 +142,8 @@ def GetStocksPriceRecommendations(params):
 def ConvertPriceTagetToUSD(params):
 
     date = params.date
+    ClientDB = pymongo.MongoClient("mongodb://localhost:27017/")
+
     list_sp = PriceTargetAndconsensusValuesData(ClientDB, date, type_price_target, {}, None).GetValuesFromDB()
 
     for pt in list_sp:
@@ -150,12 +164,14 @@ def ConvertPriceTagetToUSD(params):
 
             PriceTargetAndconsensusValuesData(ClientDB, date,type_price_target,id,{'price_usd': price_usd}).UpdateValuesInDB()
 
+    ClientDB.close()
 
 def PatchStocksPriceRecommendations(params):
 
     """This function patch all the data for the Price Target and the Recommendations giver the horizon
 
     """
+    ClientDB = pymongo.MongoClient("mongodb://localhost:27017/")
 
     cusip_query = params.query[0]
     ticker_query = params.query[1]
@@ -218,3 +234,5 @@ def PatchStocksPriceRecommendations(params):
 
                         PriceTargetAndconsensusValuesData(ClientDB, tab_date[per], params.type,
                                                               actual_value['_id'], {'$set': {"variation": var}})
+
+

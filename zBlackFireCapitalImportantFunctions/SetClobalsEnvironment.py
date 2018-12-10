@@ -1,12 +1,19 @@
 import collections
+
+import motor
+import tornado
+import tornado.web
 import pymongo
 import wrds
 import multiprocessing
 import multiprocessing.pool
+import numpy as np
+import time
 
 from bBlackFireCapitalData.CountriesEconomicsData.CountriesExchangeRatesData.GetExchangeRatesData import \
     SetExchangeRatesCurrencyInDB
-from bBlackFireCapitalData.StocksMarketData.StocksPriceData.GetStocksInfosDataFromWRDS import SetStocksInfosDataInDB
+from bBlackFireCapitalData.StocksMarketData.StocksPriceData.GetStocksInfosDataFromWRDS import SetStocksInfosDataInDB, \
+    GetStocksInfosDataDict
 from bBlackFireCapitalData.CountriesEconomicsData.CountriesEconomicsZoneData.GetCountriesEconomicsZoneData import \
     SetCountriesEconomicsZonesInDB, SetCountriesEconomicsZonesForStocksInDB
 from bBlackFireCapitalData.MergeStocksData.MergeAllStocksData import SetGvkeyInStocksPriceRecoomendationsInfos, \
@@ -15,6 +22,7 @@ from bBlackFireCapitalData.StocksMarketData.StocksPriceData.GetStocksPriceDataFr
     ConvertStocksPriceToUSD
 from bBlackFireCapitalData.StocksMarketData.StocksPriceRecommendationData.GetStocksPriceRecommendations import \
     GetStocksPriceRecommendations, ConvertPriceTagetToUSD, PatchStocksPriceRecommendations
+from zBlackFireCapitalImportantFunctions.ConnectionString import TestConnectionString
 from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import GenerateMonthlyTab, principal_processor, \
     type_consensus, type_price_target, SetBackupOfDataBase, RestoreBackupOfdataBase, \
     CurrenciesExchangeRatesDBName, StocksMarketDataInfosDBName
@@ -47,7 +55,8 @@ StocksPriceParams = collections.namedtuple('StocksPriceParams',[
       'library',
       'globalWRDS',
       'observation',
-      'offset'])
+      'offset',
+        'connectionstring'])
 
 StocksRecommentdationsParams = collections.namedtuple('StocksRecommentdationsParams',[
       'table',
@@ -69,70 +78,67 @@ MergeStocksWithPriceRecommendationsParams = collections.namedtuple('MergeStocksW
         'type',
         'date',
       ])
-ClientDB = pymongo.MongoClient("mongodb://localhost:27017/")
 
 
 if __name__ == '__main__':
+
+    connectionstring = TestConnectionString
+
     """This function set all the data inside the platforms"""
-    # for name in ClientDB.database_names():
-    #     print(name)
-    #     if name[:5] == 'stock':
-    #         ClientDB.drop_database(name)
-    #         print('drop'+ name)
-    #
-    # ClientDB.close()
-    # """1. Download of all the currency pair"""
-    SetExchangeRatesCurrencyInDB(currency_from='USD')
-    # SetExchangeRatesCurrencyInDB(currency_from='EUR')
-    # SetExchangeRatesCurrencyInDB(currency_from='GBP')
-    #
-    # description = 'BackupCreate' + CurrenciesExchangeRatesDBName
-    # SetBackupOfDataBase(description)
-    #
-    # print("""2. Download all the Stocks Infos """)
+
+    print("""1. Download of all the currency pair""") #DONE: Verified
+    # SetExchangeRatesCurrencyInDB(currency_from='USD', connectionString=connectionstring)
+    # SetExchangeRatesCurrencyInDB(currency_from='EUR', connectionString=TestConnectionString)
+    # SetExchangeRatesCurrencyInDB(currency_from='GBP', connectionString=TestConnectionString)
+
+    print("""2. Download All the Economics Zones""") #DONE: Verified
+    # SetCountriesEconomicsZonesInDB(connectionstring=connectionstring)
+
+    print("""3. Download all the Stocks Infos """)
     """parameter: library = comp, table= [security, names], observation = int, offset = int, globalWrds =true/false."""
-    # ClientDB.drop_database("stocks_infos")
     # params = StocksInfosParams(library='comp', table=['g_security', 'g_names'], globalWRDS=True)
-    # SetStocksInfosDataInDB(params)
+    # GetStocksInfosDataDict(params)
     # print("GLobal Completed")
     # params = StocksInfosParams(library='comp', table=['security', 'names'], globalWRDS=False)
-    # SetStocksInfosDataInDB(params)
+    # GetStocksInfosDataDict(params)
     # print("North America Completed")
     #
-    # description = 'BackupCreate' + StocksMarketDataInfosDBName
-    # SetBackupOfDataBase(description)
+    # SetStocksInfosDataInDB(connectionstring)
+
+    print("4. Donwnload All Economics zones and add Zones to Stocks Infos")
+
+    # SetCountriesEconomicsZonesForStocksInDB(connectionstring)
 
     # TODO
-    "3. Download Stock Price Data"
+    print("5. Download Stock Price Data")
 
     # db = wrds.Connection()
     # count = db.get_row_count(library="comp",
-    #                      table="secd")
+    #                         table="secd")
     # db.close()
-    # observ = 1000000
+    # observ = 1000
+    # count = 1000
     # iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
     # pt = ()
     # for v in range(iter):
     #     pt += StocksPriceParams(library='comp',
-    #                         table='secd',
-    #                         observation=observ,
-    #                         offset=v * 1000000,
-    #                         globalWRDS= False),
-    # #pool = MyPool(2)
-    # #result = pool.map(GetStocksPriceData, pt)
-    # #pool.close()
-    # #pool.join()
-    # GetStocksPriceData(pt[0])
-    # #print(result)
-
-    description = 'BackupCreate Stocks Price North America'
-    # SetBackupOfDataBase(description)
+    #                             table='secd',
+    #                             observation=observ,
+    #                             offset=v * 1000000,
+    #                             globalWRDS= False,
+    #                             connectionstring=connectionstring),
+    # pool = MyPool(2)
+    # result = pool.map(GetStocksPriceData, pt)
+    # pool.close()
+    # pool.join()
+    # print(result)
 
     db = wrds.Connection()
     count = db.get_row_count(library="comp",
                              table="g_secd")
     db.close()
-    observ = 1000000
+    observ = 1000
+    count = 1000
     iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
     pt = ()
     for v in range(iter):
@@ -140,20 +146,17 @@ if __name__ == '__main__':
                                 table='g_secd',
                                 observation=observ,
                                 offset=v * 1000000,
-                                globalWRDS= True),
+                                globalWRDS=True,
+                               connectionstring=connectionstring),
     pool = MyPool(2)
     result = pool.map(GetStocksPriceData, pt)
     pool.close()
     pool.join()
     print(result)
-    description = 'BackupCreate Stocks Price Global'
-    # SetBackupOfDataBase(description)
+    # description = 'BackupCreate Stocks Price Global'
+    # # SetBackupOfDataBase(description)
 
-#TODO
-print("4. Donwnload All Economics zones and add Zones to Stocks Infos")
-
-#SetCountriesEconomicsZonesInDB()
-# SetCountriesEconomicsZonesForStocksInDB()
+#
 #
 # description = 'BackupCreateZonesandsetEcoZoneforstocks'
 # SetBackupOfDataBase(description)

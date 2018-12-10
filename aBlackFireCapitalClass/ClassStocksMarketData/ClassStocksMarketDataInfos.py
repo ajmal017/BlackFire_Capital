@@ -1,55 +1,26 @@
-import pymongo
+from tornado import gen
 
 from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import StocksMarketDataInfosDBName
 
 
 class StocksMarketDataInfos():
 
+    """This Class set all the informations of the stocks."""
+
     def __init__(self, database, *data):
 
-        self.database = database[StocksMarketDataInfosDBName].value
+        self.database = database['stocks'][StocksMarketDataInfosDBName]
         self.data = data
 
+    @gen.coroutine
     def SetDataInDB(self):
 
         "{'_id', 'company name', 'incorporation location', 'naics', 'sic', 'gic sector','gic ind'"
         "'eco zone', 'stock identification'}"
 
-        try:
-            self.database.insert_one(self.data[0])
-        except pymongo.errors.DuplicateKeyError:
-
-            data = self.data[0]
-            value = self.database.find_one({"_id": data['_id']})
-
-            if data['company name'] is not None:
-                value['company name'] = data['company name']
-
-            if data['incorporation location'] is not None:
-                value['incorporation location'] = data['incorporation location']
-
-            if data['naics'] is not None:
-                value['naics'] = data['naics']
-
-            if data['sic'] is not None:
-                value['sic'] = data['sic']
-
-            if data['gic sector'] is not None:
-                value['gic sector'] = data['gic sector']
-
-            if data['gic ind'] is not None:
-                value['gic ind'] = data['gic ind']
-
-            if data['eco zone'] is not None:
-                value['eco zone'] = not data['eco zone']
-
-            if data['stock identification'] is not None:
-                tab = [data['stock identification'][0]]
-                for v in value['stock identification']:
-                    tab.append(v)
-                value['stock identification'] = tab[:]
-
-            self.database.update_one({'_id': data['_id']}, {'$set': value})
+        yield self.database.insert_many(self.data[0])
+        count = yield self.database.count_documents({})
+        print("Final count: %d" % count)
 
     def GetDataFromDB(self):
 
@@ -61,8 +32,9 @@ class StocksMarketDataInfos():
 
         return tab_of_result
 
+    @gen.coroutine
     def UpdateDataInDB(self):
 
-        id = self.data[0]
+        query = self.data[0]
         value = self.data[1]
-        self.database.update_one({'_id': id}, {'$set': value})
+        yield self.database.update_many(query, {"$set": value})

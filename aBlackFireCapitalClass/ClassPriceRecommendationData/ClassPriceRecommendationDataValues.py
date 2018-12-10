@@ -4,7 +4,7 @@ class PriceTargetAndconsensusValuesData:
 
     def __init__(self, database, date, type, *data):
 
-        self.database = database[type + '_' + date].value
+        self.database = database['stocks'][type][date].value
         self.data = data
         self.type = type
 

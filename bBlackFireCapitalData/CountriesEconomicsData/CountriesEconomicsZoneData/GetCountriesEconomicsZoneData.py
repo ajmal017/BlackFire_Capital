@@ -1,4 +1,7 @@
+import motor
 import pymongo
+import tornado
+
 from aBlackFireCapitalClass.ClassEconomcisZonesData.ClassEconomicsZonesDataInfos import EconomicsZonesDataInfos
 from aBlackFireCapitalClass.ClassStocksMarketData.ClassStocksMarketDataInfos import StocksMarketDataInfos
 from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import country_zone_and_exchg
@@ -6,23 +9,28 @@ from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import country_zone
 __author__ = 'pougomg'
 
 
-def SetCountriesEconomicsZonesInDB():
-
-    ClientDB = pymongo.MongoClient("mongodb://localhost:27017/")
-
+def SetCountriesEconomicsZonesInDB(connectionstring):
+    ClientDB = motor.motor_tornado.MotorClient(connectionstring)
+    tab_country_zone = []
     for value in country_zone_and_exchg:
-        data = {"_id":value[1], "eco zone": value[2], "name": value[0]}
-        EconomicsZonesDataInfos(ClientDB,data).SetEconomicsZonesInDB()
+        tab_country_zone.append({"_id": value[1], "eco zone": value[2], "name": value[0]})
+
+    tornado.ioloop.IOLoop.current().run_sync(EconomicsZonesDataInfos(ClientDB, tab_country_zone).SetEconomicsZonesInDB)
     ClientDB.close()
 
-def SetCountriesEconomicsZonesForStocksInDB():
 
-    ClientDB = pymongo.MongoClient("mongodb://localhost:27017/")
+def SetCountriesEconomicsZonesForStocksInDB(connectionstring):
 
-    for stocksInfos in StocksMarketDataInfos(ClientDB, {}, None).GetDataFromDB():
-        fic = stocksInfos['incorporation location']
-        tab_zone_eco = EconomicsZonesDataInfos(ClientDB, {'_id': fic}, None).GetEconomicsZonesFromDB()
-        for zone_eco in tab_zone_eco:
-            StocksMarketDataInfos(ClientDB,stocksInfos['_id'], {'eco zone': zone_eco['eco zone']}).UpdateDataInDB()
+    ClientDB = motor.motor_tornado.MotorClient(connectionstring)
+    tab_zone_eco = tornado.ioloop.IOLoop.current().run_sync(EconomicsZonesDataInfos(ClientDB, {}, None).GetEconomicsZonesFromDB)
+
+    print(tab_zone_eco)
+
+    for zone_eco in tab_zone_eco:
+        tornado.ioloop.IOLoop.current().run_sync(
+            StocksMarketDataInfos(
+                ClientDB,
+                {'incorporation location': zone_eco['_id']},
+                {'eco zone': zone_eco['eco zone']}).UpdateDataInDB)
 
     ClientDB.close()

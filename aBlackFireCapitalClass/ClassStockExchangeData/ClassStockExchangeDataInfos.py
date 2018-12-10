@@ -4,7 +4,7 @@ import pymongo
 class StockExchangeDataInfos:
 
     def __init__(self, database, *data):
-        self.database = database['stock_exchange']['infos']
+        self.database = database['stocks']['stock_exchange']
         self.data = data
 
     def __str__(self):
@@ -15,7 +15,7 @@ class StockExchangeDataInfos:
                       "to display."
         return description
 
-    def SetStockExchangeInDB(self):
+    async def SetStockExchangeInDB(self):
         "{'exchg'(_id), 'exchg country'}"
         try:
             self.database.insert_one(self.data[0])

@@ -16,6 +16,7 @@ type_price_target = 'price_target'
 CurrenciesExchangeRatesDBName = 'currency'
 StocksMarketDataInfosDBName = 'stocks_infos'
 
+
 country_zone_and_exchg = [['canada','CAN','CAD','7'], ['united states','USA','USD','11','12','14','17'],
            ['austria', 'AUT', 'EUR', '150', '273'],
            ['belgium','BEL', 'EUR', '132', '150', '161', '188', '285', '294'],

@@ -124,7 +124,7 @@ def GetStocksPriceData(params):
 def ConvertStocksPriceToUSD(params):
 
     date = params.date
-    ClientDB = pymongo.MongoClient("mongodb://localhost:27017/")
+    ClientDB = motor.motor_tornado.MotorClient(params.connectionstring)
 
     list_sp = StocksMarketDataPrice(ClientDB,date, {}, None).GetStocksPriceFromDB()
     print(date)

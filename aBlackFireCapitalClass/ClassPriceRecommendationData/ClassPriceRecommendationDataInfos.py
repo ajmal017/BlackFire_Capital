@@ -23,16 +23,16 @@ class PriceTargetAndconsensusInfosData:
 
         data = self.data[0]
         ticker = data['ticker']
-        self.database.insert(data)
 
         r = self.database.find({'_id':ticker, 'ticker': ticker})
 
-        # if r is not None and data['ticker'] != data['_id']:
-        #     self.database.delete_one({'_id': ticker, 'ticker': ticker})
-        # try:
-        # except pymongo.errors.DuplicateKeyError:
-        #     e = "ClassPriceRecommendationData.ClasspricerecommendationDataInfos.SetinfosInDB.DuplicateKeyError " \
-        #         "" + self.type +' '+ data['_id']
+        if r is not None and data['ticker'] != data['_id']:
+            self.database.delete_one({'_id': ticker, 'ticker': ticker})
+        try:
+            self.database.insert(data)
+        except pymongo.errors.DuplicateKeyError:
+            e = "ClassPriceRecommendationData.ClasspricerecommendationDataInfos.SetinfosInDB.DuplicateKeyError " \
+                "" + self.type +' '+ data['_id']
 
     def GetInfosFromDB(self):
 

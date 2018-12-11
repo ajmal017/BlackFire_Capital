@@ -13,7 +13,7 @@ class StocksMarketDataPrice:
 
     def __init__(self, database, date, *data):
 
-        self.database = database['stocks']['summary'][date]
+        self.database = database['stocks']['summary'][date[:4]][5:]
         self.data = data
 
     def __str__(self):
@@ -29,8 +29,8 @@ class StocksMarketDataPrice:
     @gen.coroutine
     def SetStocksPriceInDB(self):
 
-        "{'_id','gvkey','date','curr','csho','vol','adj_factor','price_close','price_high',"
-        "price_low','return','ret_usd','curr_to_usd','consensus','price_target'}"
+        """{'_id','gvkey','date','curr','csho','vol','adj_factor','price_close','price_high',
+        "price_low','return','ret_usd','curr_to_usd','consensus','price_target'}"""
 
         yield self.database.insert_many(self.data[0])
         # count = yield self.database.count_documents({})
@@ -51,5 +51,4 @@ class StocksMarketDataPrice:
 
         id = self.data[0]
         newvalue = self.data[1]
-        print
         self.database.update_one({'_id': id}, {'$set': newvalue})

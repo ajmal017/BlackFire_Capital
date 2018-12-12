@@ -1,4 +1,5 @@
 import pymongo
+from tornado import gen
 
 
 class PriceTargetAndconsensusInfosData:
@@ -17,23 +18,21 @@ class PriceTargetAndconsensusInfosData:
                       "query, data to display)."
         return description
 
+    @gen.coroutine
     def SetInfosInDB(self):
 
         """ {'cusip'(_id), 'comn', ticker}"""
-
-        data = self.data[0]
-        ticker = data['ticker']
-
-        r = self.database.find({'_id':ticker, 'ticker': ticker})
-
-        if r is not None and data['ticker'] != data['_id']:
-            self.database.delete_one({'_id': ticker, 'ticker': ticker})
         try:
-            self.database.insert(data)
-        except pymongo.errors.DuplicateKeyError:
-            e = "ClassPriceRecommendationData.ClasspricerecommendationDataInfos.SetinfosInDB.DuplicateKeyError " \
-                "" + self.type +' '+ data['_id']
+            yield self.database.insert_many(self.data[0])
+            count = yield self.database.count_documents({})
+            print("Final count: %d" % count)
+        except pymongo.errors.BulkWriteError as bwe:
+            print(bwe.details)
+            #you can also take this component and do more analysis
+            #werrors = bwe.details['writeErrors']
+            raise
 
+    @gen.coroutine
     def GetInfosFromDB(self):
 
         query = self.data[0]
@@ -44,8 +43,9 @@ class PriceTargetAndconsensusInfosData:
             tab.append(value)
         return tab
 
-    def UpdateInfosInDB(self):
+    @gen.coroutine
+    def UpdateDataInDB(self):
 
-        id = self.data[0]
-        query = self.data[1]
-        self.database.update_one({"_id": id}, query)
+        query = self.data[0]
+        value = self.data[1]
+        yield self.database.update_many(query, {"$set": value})

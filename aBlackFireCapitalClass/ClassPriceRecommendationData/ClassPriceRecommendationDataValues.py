@@ -1,10 +1,19 @@
 import pymongo
+from tornado import gen
+import multiprocessing
+import collections
+
+from concurrent.futures import ProcessPoolExecutor
+
+StocksRec = collections.namedtuple('StocksRec',[
+    'month',
+    'data',])
 
 class PriceTargetAndconsensusValuesData:
 
     def __init__(self, database, date, type, *data):
 
-        self.database = database['stocks'][type][date].value
+        self.database = database['stocks'][type]
         self.data = data
         self.type = type
 
@@ -21,23 +30,19 @@ class PriceTargetAndconsensusValuesData:
 
         return description
 
+    @gen.coroutine
     def SetValuesInDB(self):
 
-        "'price_target': {'cusip','ticker','analyst','price',"
-        "'horizon','curr','date_activate','mask_code','variation','price_usd'}"
+        """
+            :param: price_target: {'cusip','ticker','analyst','price','horizon','curr','
+                                    date_activate','mask_code','variation','price_usd'};
 
-        "'consensus': {'cusip', 'ticker', 'analyst', 'recom', "" \
-        ""'horizon','date_activate','mask_code','variation'}"
-        data = self.data[0]
-        self.database.insert_one(data)
-        # myquery = {"cusip": data['cusip'], "mask_code": data['mask_code']}
-        #
-        # value = self.database.find_one(myquery)
-        #
-        # if value is not None:
-        #     if data['date_activate'] > value['date_activate']:
-        #         self.database.update_one({'_id': value['_id']}, {'$set': data})
-        # else:
+            :param  consensus: {'cusip', 'ticker', 'analyst', 'recom', 'horizon',
+                                'date_activate','mask_code','variation'}."""
+        yield self.database.insert_many(self.data[0])
+        count = yield self.database.count_documents({})
+        print("Final count: %d" % count)
+
 
 
     def GetValuesFromDB(self):

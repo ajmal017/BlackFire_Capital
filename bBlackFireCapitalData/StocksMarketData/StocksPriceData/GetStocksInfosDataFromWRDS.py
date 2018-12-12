@@ -7,7 +7,6 @@ __author__ = 'pougomg'
 import wrds
 import numpy as np
 
-
 def GetStocksInfosDataDict(parameter):
 
     """parameter: library = comp, table= [security, names], observation = int, offset = int, globalWrds =true/false."""

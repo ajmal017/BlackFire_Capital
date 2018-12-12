@@ -5,6 +5,7 @@ Created on Sun Oct 21 20:05:00 2018
 @author: Utilisateur
 """
 import motor
+import tornado
 import wrds
 import datetime
 import multiprocessing
@@ -19,15 +20,13 @@ from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import type_consens
     secondary_processor, GenerateMonthlyTab
 
 table = collections.namedtuple('table', [
-    'value', "position", "type",
+    'value', "position", "type", "connectionstring",
 ])
 
 
 def GetStocksPriceRecommendations(params):
 
     db = wrds.Connection()
-
-    global SetPriceRecommendationsInDB
 
     if params.type == type_price_target:
         entete = ['ticker', 'cusip', 'cname', 'estimid', 'horizon', 'value',
@@ -43,99 +42,100 @@ def GetStocksPriceRecommendations(params):
                        offset=params.offset)
     db.close()
 
-    def SetPriceRecommendationsInDB(params):
+    dict_infos = dict()
+    tab_infos = []
 
-        tab = params.value
-        dict_infos = dict()
-        ClientDB = pymongo.MongoClient("mongodb://localhost:27017/")
+    ClientDB = motor.motor_tornado.MotorClient(params.connectionstring)
 
-        if params.type == type_price_target:
+    if params.type == type_price_target:
 
-            for res in tab:
+        for pos in range(res.shape[0]):
 
-                tic = res[0]
-                cusip = res[1]
-                cname = res[2]
-                estim = res[3]
-                hor = res[4]
-                value = res[5]
-                cur = res[6]
-                date = res[7]
-                mask_code = res[8]
-                if cusip == None:
-                    cusip = tic
+            tic = res[entete[0]][pos]
+            cusip = res[entete[1]][pos]
+            cname = res[entete[2]][pos]
+            estim = res[entete[3]][pos]
+            hor = res[entete[4]][pos]
+            value = res[entete[5]][pos]
+            cur = res[entete[6]][pos]
+            date = res[entete[7]][pos]
+            mask_code = res[entete[8]][pos]
 
-                date_str = str(date.year) + '-' + str(date.month) + '-' + str(date.day)
-                d = str(date.year) + 'M' + str(date.month)
-                date = datetime.datetime.strptime(date_str, "%Y-%m-%d")
-                data = {'_id': cusip, 'comn':cname, 'ticker':tic}
+            if cusip == None:
+                cusip = tic
 
-                dict_infos[(cusip, tic)] = data
+            yr = str(date.year)
+            if date.month < 10:
+                month = "0" + str(date.month)
+            else:
+                month = str(date.month)
+            if date.day < 10:
+                day = "0" + str(date.day)
+            else:
+                day = str(date.day)
 
-                if (cusip != tic):
-                    if dict_infos.get((tic, tic), False):
-                        del dict_infos[(tic, tic)]
+            date_str = yr + '-' + month
+            date = datetime.datetime(date.year, date.month, date.day, 16, 0, 0, 0)
+
+            data = {'cusip':cusip,'ticker': tic,'analyst':estim,'price':value,'horizon':hor,
+                    'curr':cur,'date_activate':date,'mask_code':mask_code,'variation':None,'price_usd':None}
+
+            # if dict_infos.get(date_str,False):
+            #     dict_infos[date_str].append(data)
+            # else:
+            #     dict_infos[date_str] = [data]
+            tab_infos.append(data)
 
 
-                data = {'cusip':cusip,'ticker': tic,'analyst':estim,'price':value,'horizon':hor,
-                        'curr':cur,'date_activate':date,'mask_code':mask_code,'variation':None,'price_usd':None}
 
-                PriceTargetAndconsensusValuesData(ClientDB,d,params.type,data).SetValuesInDB()
+    if params.type == type_consensus:
 
-            for key in dict_infos:
-                PriceTargetAndconsensusInfosData(ClientDB,params.type,dict_infos[key]).SetInfosInDB()
+        for pos in range(res.shape[0]):
+
+            tic = res[entete[0]][pos]
+            cusip = res[entete[1]][pos]
+            cname = res[entete[2]][pos]
+            estim = res[entete[3]][pos]
+            value = res[entete[4]][pos]
+            date = res[entete[5]][pos]
+            mask_code = res[entete[6]][pos]
+
+            if cusip == None:
+                cusip = tic
+
+            yr = str(date.year)
+            if date.month < 10:
+                month = "0" + str(date.month)
+            else:
+                month = str(date.month)
+            if date.day < 10:
+                day = "0" + str(date.day)
+            else:
+                day = str(date.day)
+
+            date_str = yr + '-' + month
+            date = datetime.datetime(date.year, date.month, date.day, 16, 0, 0, 0)
+
+            "'consensus': {'cusip', 'ticker', 'analyst', 'recom', "" \
+                    ""'horizon','date_activate','mask_code','variation'}"
+            data = {'cusip': cusip, 'ticker': tic, 'analyst': estim, 'recom': value, 'horizon': 6
+                    ,'date_activate': date, 'mask_code': mask_code, 'variation': None}
+
+            # if dict_infos.get(date_str,False):
+            #     dict_infos[date_str].append(data)
+            # else:
+            #     dict_infos[date_str] = [data]
+            tab_infos.append(data)
+
+    print("Start Pushing")
+
+    data = []
 
 
-        if params.type == type_consensus:
-
-            for res in range(tab):
-
-                tic = res[0]
-                cusip = res[1]
-                cname = res[2]
-                estim = res[3]
-                value = res[4]
-                date = res[5]
-                mask_code = res[6]
-                if cusip == None:
-                    cusip = tic
-
-                date_str = str(date.year) + '-' + str(date.month) + '-' + str(date.day)
-                d = str(date.year) + 'M' + str(date.month)
-                date = datetime.datetime.strptime(date_str, "%Y-%m-%d")
-
-                data = {'_id': cusip, 'comn': cname, 'ticker': tic}
-                PriceTargetAndconsensusInfosData(ClientDB, params.type, data).SetInfosInDB()
-
-                "'consensus': {'cusip', 'ticker', 'analyst', 'recom', "" \
-                        ""'horizon','date_activate','mask_code','variation'}"
-                data = {'cusip': cusip, 'ticker': tic, 'analyst': estim, 'recom': value, 'horizon': 6
-                        ,'date_activate': date, 'mask_code': mask_code, 'variation': None}
-
-                PriceTargetAndconsensusValuesData(ClientDB, d, params.type, data).SetValuesInDB()
-
-        ClientDB.close()
-        return 'lot : [', params.position, "] Completed"
-
-    res = res.values
-    count = res.shape[0]
-    observ = 200000
-    iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
-
-    pt = ()
-    for v in range(iter):
-
-        start = v * observ
-        end = (v + 1) * observ
-        if end > count:
-            end = count
-        pt += table(value=res[start:end, :], position=params.offset, type=params.type),
-
-    pool = multiprocessing.Pool(processes=secondary_processor)
-    result = pool.map(SetPriceRecommendationsInDB, pt)
-    print(result)
-    pool.close()
-    pool.join()
+    # print(tab_infos)
+    tornado.ioloop.IOLoop.current().run_sync(
+                PriceTargetAndconsensusValuesData(ClientDB, "ALL", params.type, tab_infos).SetValuesInDB)
+    ClientDB.close()
 
     return 'lot : [', params.offset, ", ", params.observation + params.offset, "] Completed"
 
@@ -258,25 +258,26 @@ def SetPriceRecommendationsInDB(params):
             if cusip == None:
                 cusip = tic
 
-            date_str = str(date.year) + '-' + str(date.month) + '-' + str(date.day)
-            d = str(date.year) + 'M' + str(date.month)
-            date = datetime.datetime.strptime(date_str, "%Y-%m-%d")
-            data = {'_id': cusip, 'comn':cname, 'ticker':tic}
+            yr = str(date.year)
+            if date.month < 10:
+                month = "0" + str(date.month)
+            else:
+                month = str(date.month)
+            if date.day < 10:
+                day = "0" + str(date.day)
+            else:
+                day = str(date.day)
 
-            dict_infos[(cusip, tic)] = data
-
-            if (cusip != tic):
-                if dict_infos.get((tic, tic), False):
-                    del dict_infos[(tic, tic)]
-
+            date_str = yr + '-' + month
+            date = datetime.datetime(date.year, date.month, date.day, 16, 0, 0, 0)
 
             data = {'cusip':cusip,'ticker': tic,'analyst':estim,'price':value,'horizon':hor,
                     'curr':cur,'date_activate':date,'mask_code':mask_code,'variation':None,'price_usd':None}
 
-            PriceTargetAndconsensusValuesData(ClientDB,d,params.type,data).SetValuesInDB()
-
-        for key in dict_infos:
-            PriceTargetAndconsensusInfosData(ClientDB,params.type,dict_infos[key]).SetInfosInDB()
+            if dict_infos.get(date_str,False):
+                dict_infos[date_str].append(data)
+            else:
+                dict_infos[date_str] = [data]
 
 
     if params.type == type_consensus:
@@ -293,20 +294,31 @@ def SetPriceRecommendationsInDB(params):
             if cusip == None:
                 cusip = tic
 
-            date_str = str(date.year) + '-' + str(date.month) + '-' + str(date.day)
-            d = str(date.year) + 'M' + str(date.month)
-            date = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+            yr = str(date.year)
+            if date.month < 10:
+                month = "0" + str(date.month)
+            else:
+                month = str(date.month)
+            if date.day < 10:
+                day = "0" + str(date.day)
+            else:
+                day = str(date.day)
 
-            data = {'_id': cusip, 'comn': cname, 'ticker': tic}
-            PriceTargetAndconsensusInfosData(ClientDB, params.type, data).SetInfosInDB()
+            date_str = yr + '-' + month
+            date = datetime.datetime(date.year, date.month, date.day, 16, 0, 0, 0)
 
             "'consensus': {'cusip', 'ticker', 'analyst', 'recom', "" \
                     ""'horizon','date_activate','mask_code','variation'}"
             data = {'cusip': cusip, 'ticker': tic, 'analyst': estim, 'recom': value, 'horizon': 6
                     ,'date_activate': date, 'mask_code': mask_code, 'variation': None}
 
-            PriceTargetAndconsensusValuesData(ClientDB, d, params.type, data).SetValuesInDB()
+            if dict_infos.get(date_str,False):
+                dict_infos[date_str].append(data)
+            else:
+                dict_infos[date_str] = [data]
 
+    tornado.ioloop.IOLoop.current().run_sync(
+                PriceTargetAndconsensusValuesData(ClientDB, key, params.type, dict_infos[key]).SetValuesInDB())
     ClientDB.close()
     return 'lot : [', params.position, "] Completed"
 

@@ -20,6 +20,8 @@ from bBlackFireCapitalData.MergeStocksData.MergeAllStocksData import SetGvkeyInS
     MergeStocksWithPriceRecommendations
 from bBlackFireCapitalData.StocksMarketData.StocksPriceData.GetStocksPriceDataFromWRDS import GetStocksPriceData, \
     ConvertStocksPriceToUSD
+from bBlackFireCapitalData.StocksMarketData.StocksPriceRecommendationData.GetStocksInfosRecommendations import \
+    SetStocksInfosRecommendationsInDB
 from bBlackFireCapitalData.StocksMarketData.StocksPriceRecommendationData.GetStocksPriceRecommendations import \
     GetStocksPriceRecommendations, ConvertPriceTagetToUSD, PatchStocksPriceRecommendations
 from zBlackFireCapitalImportantFunctions.ConnectionString import TestConnectionString, ProdConnectionString
@@ -97,21 +99,27 @@ if __name__ == '__main__':
 
     print("""3. Download all the Stocks Infos, DONE: Verified """)
 
-    """parameter: library = comp, table= [security, names], observation = int, offset = int, globalWrds =true/false."""
-    params = StocksInfosParams(library='comp', table=['g_security', 'g_names'], globalWRDS=True)
-    GetStocksInfosDataDict(params)
-    print("GLobal Completed")
-    params = StocksInfosParams(library='comp', table=['security', 'names'], globalWRDS=False)
-    GetStocksInfosDataDict(params)
-    print("North America Completed")
+    # """parameter: library = comp, table= [security, names], observation = int, offset = int, globalWrds =true/false."""
+    # params = StocksInfosParams(library='comp', table=['g_security', 'g_names'], globalWRDS=True)
+    # GetStocksInfosDataDict(params)
+    # print("GLobal Completed")
+    # params = StocksInfosParams(library='comp', table=['security', 'names'], globalWRDS=False)
+    # GetStocksInfosDataDict(params)
+    # print("North America Completed, DONE: Verfified")
+    #
+    # SetStocksInfosDataInDB(ProdConnectionString)
 
-    SetStocksInfosDataInDB(ProdConnectionString)
+    print("4. Donwnload All Economics zones and add Zones to Stocks Infos: Done Verified")
 
-    print("4. Donwnload All Economics zones and add Zones to Stocks Infos: Done ")
+    # SetCountriesEconomicsZonesForStocksInDB(ProdConnectionString)
 
-    SetCountriesEconomicsZonesForStocksInDB(ProdConnectionString)
+    print("5. Download Recommendation Infos. Done Verified")
+    # SetStocksInfosRecommendationsInDB(type_price_target, ProdConnectionString)
+    # SetStocksInfosRecommendationsInDB(type_consensus, ProdConnectionString)
 
-    print("5. Download Stock Price Data, DONE: Verified")
+    print("")
+
+    print("5. Download Stock Price Data,")
 
     db = wrds.Connection()
     count = db.get_row_count(library="comp",
@@ -168,49 +176,46 @@ if __name__ == '__main__':
     print("7. Set Price Target and Consensus Data")
 
 
-    # db = wrds.Connection()
-    # count = db.get_row_count(library="ibes",
-    #                          table="ptgdet")
-    # db.close()
-    # print(count)
-    # observ = 1000000
-    # iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
-    # pt = ()
-    # for v in range(iter):
-    #    pt += StocksRecommentdationsParams(library='ibes',
-    #                                       table='ptgdet',
-    #                                       observation=observ,
-    #                                       offset=v * 1000000,
-    #                                       type= type_price_target,
-    #                                       connectionstring=ProdConnectionString),
-    # pool = MyPool(2)
-    # result = pool.map(GetStocksPriceRecommendations, pt)
-    # pool.close()
-    # pool.join()
-    # print(result)
-    # description = 'Backup_Download_Price_Target'
-    # print(description)
-    # SetBackupOfDataBase(description)
-    #
-    # db = wrds.Connection()
-    # count = db.get_row_count(library="ibes",
-    #                          table="recddet")
-    # db.close()
-    # observ = 1000000
-    # iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
-    # pt = ()
-    # for v in range(iter):
-    #    pt += StocksRecommentdationsParams(library='ibes',
-    #                                       table='recddet',
-    #                                       observation=observ,
-    #                                       offset=v * 1000000,
-    #                                       type= type_consensus,
-    #                                       connectionstring=ProdConnectionString),
-    # pool = MyPool(2)
-    # result = pool.map(GetStocksPriceRecommendations, pt)
-    # pool.close()
-    # pool.join()
-    # print(result)
+    db = wrds.Connection()
+    count = db.get_row_count(library="ibes",
+                             table="ptgdet")
+    db.close()
+    print(count)
+    observ = 1000000
+    iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
+    pt = ()
+    for v in range(iter):
+       pt += StocksRecommentdationsParams(library='ibes',
+                                          table='ptgdet',
+                                          observation=observ,
+                                          offset=v * 1000000,
+                                          type= type_price_target,
+                                          connectionstring=ProdConnectionString),
+    pool = MyPool(2)
+    result = pool.map(GetStocksPriceRecommendations, pt)
+    pool.close()
+    pool.join()
+    print(result)
+
+    db = wrds.Connection()
+    count = db.get_row_count(library="ibes",
+                             table="recddet")
+    db.close()
+    observ = 1000000
+    iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
+    pt = ()
+    for v in range(iter):
+       pt += StocksRecommentdationsParams(library='ibes',
+                                          table='recddet',
+                                          observation=observ,
+                                          offset=v * 1000000,
+                                          type= type_consensus,
+                                          connectionstring=ProdConnectionString),
+    pool = MyPool(2)
+    result = pool.map(GetStocksPriceRecommendations, pt)
+    pool.close()
+    pool.join()
+    print(result)
 
 
 "7. Set all Price target to USD"

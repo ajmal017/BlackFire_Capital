@@ -1,8 +1,10 @@
+from datetime import datetime, timedelta
+
 import pymongo
 import pandas as pd
 import numpy as np
 from mongobackup import backup, restore
-
+import calendar
 
 #ClientDB['admin'].add_user("GhislainPougomNoubissie", "BlackFireCapitalIncFromBottomToTheTop")
 #ClientDB['admin'].command("createUser", "GhislainPougomNoubissie", pwd="BlackFireCapitalIncFromBottomToTheTop", roles=["root"])
@@ -72,7 +74,7 @@ def GenerateMonthlyTab(start_date, end_date):
     for yr in range(start_year, end_year + 1):
 
         for month in range(1, 13):
-            date = str(yr) + 'M' + str(month)
+            date = str(yr) + '-' + str(month)
             if date == start_date:
                 b = True
             if b:
@@ -82,9 +84,58 @@ def GenerateMonthlyTab(start_date, end_date):
     return tab
 
 
+def GenerateDailyTab(start_date, end_date):
+    tab_day = [0, 1, 2, 3, 4]
+    timedelta(days=1)
+    pos = 0
+    tab = [[start_date]]
+    to_append = []
+
+    while start_date != end_date:
+        pos += 1
+        start_date = start_date + timedelta(days=1)
+        if pos%7 in tab_day:
+            to_append.append(start_date)
+            tab.append(to_append)
+            to_append = []
+        else:
+            to_append.append(start_date)
+
+    return tab
+
+
+def GenerateWorkingDailyTab(start_date, end_date):
+
+    tab_day = [0, 1, 2, 3, 4]
+    start = False
+    cal = calendar.Calendar()
+    tab_date_to_add = []
+    print(start_date)
+    for yr in range(start_date.year, end_date.year + 1):
+        for month in range(1, 13):
+            list_mo = list(cal.itermonthdays(yr, month))
+            print(list_mo)
+            pos = 0
+            for day in list_mo:
+
+                if day != 0:
+                    if start:
+                        if day != 0 and pos%7 in tab_day:
+                            tab_date_to_add.append(datetime(yr,month,day,16,0,0,0))
+                    if datetime(yr, month, day,16,0,0,0) == start_date:
+                        if day != 0 and pos%7 in tab_day:
+                            tab_date_to_add.append(datetime(yr,month,day,16,0,0,0))
+                        start = True
+
+                    if datetime(yr, month, day,16,0,0,0) == end_date:
+                        return tab_date_to_add
+
+                pos += 1
+
+
 def TestNoneValue(value, v):
     if value is not None:
-        if np.isnan(value) == True:
+       if np.isnan(value) == True:
             value = v
     else:
         value = v

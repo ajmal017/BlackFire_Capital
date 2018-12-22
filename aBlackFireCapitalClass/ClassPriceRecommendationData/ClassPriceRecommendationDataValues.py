@@ -39,21 +39,21 @@ class PriceTargetAndconsensusValuesData:
 
             :param  consensus: {'cusip', 'ticker', 'analyst', 'recom', 'horizon',
                                 'date_activate','mask_code','variation'}."""
+
         yield self.database.insert_many(self.data[0])
         count = yield self.database.count_documents({})
         print("Final count: %d" % count)
 
 
-
+    @gen.coroutine
     def GetValuesFromDB(self):
 
-        query = self.data[0]
-        to_display = self.data[1]
-
         tab = []
-
-        for value in self.database.find(query, to_display):
-            tab.append(value)
+        query = self.data[0]
+        display = self.data[1]
+        cursor = self.database.find(query, display).sort('date', 1)
+        while (yield cursor.fetch_next):
+            tab.append(cursor.next_object())
 
         return tab
 

@@ -4,93 +4,120 @@ Created on Thu Oct 18 20:07:09 2018
 @author: Utilisateur
 """
 import datetime
-
-import mongobackup
 import multiprocessing
 import collections
 
 import motor
-import pymongo
 import tornado
 import wrds
-
+from sqlalchemy import exc
+from pymongo import InsertOne, UpdateOne
 from aBlackFireCapitalClass.ClassCurrenciesData.ClassCurrenciesExchangeRatesData import CurrenciesExchangeRatesData
-from aBlackFireCapitalClass.ClassStocksMarketData.ClassStocksMarketDataInfos import StocksMarketDataInfos
 from aBlackFireCapitalClass.ClassStocksMarketData.ClassStocksMarketDataPrice import StocksMarketDataPrice
 from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import secondary_processor, TestNoneValue
 
 table = collections.namedtuple('table', [
-    'value', "position", "globalWRDS", "connectionstring"
+    'value', "position", "connectionstring","Global",
 ])
+
+OBSERVATION = 200000
 
 def GetStocksPriceData(params):
 
     db = wrds.Connection()
-
     global SetStockPriceDataInDB
 
     if params.globalWRDS:
         entete = ['gvkey', 'datadate', 'conm', 'ajexdi', 'cshoc',
                   'cshtrd', 'prccd', 'prchd', 'prcld', 'curcdd',
-                  'fic', 'isin']
+                  'fic', 'isin', 'iid']
     else:
         entete = ['gvkey', 'datadate', 'conm', 'ajexdi', 'cshoc',
                   'cshtrd', 'prccd', 'prchd', 'prcld', 'curcdd',
-                  'fic', 'cusip']
-
-    res = db.get_table(library=params.library,
-                       table=params.table,
-                       columns=entete,
-                       obs=params.observation,
-                       offset=params.offset)
+                  'fic', 'cusip', 'iid']
+    try:
+        res = db.get_table(library=params.library,
+                           table=params.table,
+                           columns=entete,
+                           obs=params.observation,
+                           offset=params.offset)
+    except exc.SQLAlchemyError:
+        return 'lot : [', params.offset, ", ", params.observation + params.offset, "] Not downloaded"
     db.close()
 
-    ClientDB = motor.motor_tornado.MotorClient(params.connectionstring)
+    def SetStockPriceDataInDB(params):
 
-    d = dict()
-    tab_price = []
-    for pos in range(res.shape[0]):
+        ClientDB = motor.motor_tornado.MotorClient(params.connectionstring)
 
-        gvkey = res[entete[0]][pos]
-        date = res[entete[1]][pos]
-        yr = str(date.year)
-        if date.month < 10:
-            month = "0" + str(date.month)
-        else:
-            month = str(date.month)
-        if date.day < 10:
-            day = "0" + str(date.day)
-        else:
-            day = str(date.day)
+        table = params.value
+        tab_price = []
+        for res in table:
 
-        date_str = yr + '-' + month + '-' + day
-        date = datetime.datetime(date.year, date.month, date.day, 16, 0, 0, 0)
+            gvkey = res[0]
+            date = res[1]
+            yr = str(date.year)
+            if date.month < 10:
+                month = "0" + str(date.month)
+            else:
+                month = str(date.month)
+            if date.day < 10:
+                day = "0" + str(date.day)
+            else:
+                day = str(date.day)
 
-        ajex = TestNoneValue(res[entete[3]][pos], 1)
-        csho = TestNoneValue(res[entete[4]][pos], 0)
-        vol = TestNoneValue(res[entete[5]][pos], 0)
-        prccd = TestNoneValue(res[entete[6]][pos], 0)
-        prchd = TestNoneValue(res[entete[7]][pos], 0)
-        prcld = TestNoneValue(res[entete[8]][pos], 0)
-        curcdd = res[entete[9]][pos]
-        isin = res[entete[11]][pos]
+            date_str = yr + '-' + month + '-' + day
+            date = datetime.datetime(date.year, date.month, date.day, 16, 0, 0, 0)
 
+            ajex = TestNoneValue(res[3], 1)
+            csho = TestNoneValue(res[4], 0)
+            vol = TestNoneValue(res[5], 0)
+            prccd = TestNoneValue(res[6], 0)
+            prchd = TestNoneValue(res[7], 0)
+            prcld = TestNoneValue(res[8], 0)
+            curcdd = res[9]
+            isin = res[11]
+            iid = res[12]
 
-        "{'_id','gvkey','date','curr','csho','vol','adj_factor','price_close','price_high',"
-        "'price_low','return','ret_usd','curr_to_usd','consensus','price_target'}"
+            try:
+                ID = isin+"_"+date_str + "_" + curcdd
 
-        data = {'_id': isin+"_"+date_str, 'isin': isin, 'gvkey': gvkey,'date': date, 'curr': curcdd, 'csho': csho, 'vol': vol, 'adj_factor': ajex,
-                'price_close': prccd, 'price_high': prchd, 'price_low': prcld, 'return': 0, 'return_usd': 0,
-                'curr_to_USD': None, 'consensus': {}, 'price_target': {}}
+                "{'_id','gvkey','date','curr','csho','vol','adj_factor','price_close','price_high',"
+                "'price_low','return','ret_usd','curr_to_usd','consensus','price_target'}"
 
-        tab_price.append(data)
+                data = {'isin_or_cusip': isin, 'gvkey': gvkey,'date': date, 'curr': curcdd, 'csho': csho, 'vol': vol, 'adj_factor': ajex,
+                        'price_close': prccd, 'price_high': prchd, 'price_low': prcld, 'return': 0, 'return_usd': 0,
+                        'curr_to_USD': None,'iid': iid,'global':params.Global, 'consensus': {},
+                        'price_target': {}}
 
+                tab_price.append(InsertOne(data))
 
-    tornado.ioloop.IOLoop.current().run_sync(
-                StocksMarketDataPrice(ClientDB, "ALL", tab_price).SetStocksPriceInDB)
+            except TypeError:
+                "Currency is None"
 
-    ClientDB.close()
+        tornado.ioloop.IOLoop.current().run_sync(
+                    StocksMarketDataPrice(ClientDB, "ALL", tab_price).SetStocksPriceInDB)
 
+        ClientDB.close()
+        return 'lot : ', params.position, " Completed"
+
+    count = res.shape[0]
+    iter = int(count/OBSERVATION) if count % OBSERVATION == 0 else int(count/OBSERVATION) + 1
+    res =res.values
+
+    pt = ()
+    for v in range(iter):
+        start = v * OBSERVATION
+        end = (v + 1) * OBSERVATION
+        if end > count:
+            end = count
+        pt += table(value= res[start: end], position=[params.offset + start,params.offset + end],
+                    connectionstring=params.connectionstring, Global=params.globalWRDS),
+
+    pool = multiprocessing.Pool(5)
+    result = pool.map(SetStockPriceDataInDB, pt)
+    pool.close()
+    pool.join()
+    print('lot : [', params.offset, ", ", params.observation + params.offset, "]")
 
     return 'lot : [', params.offset, ", ", params.observation + params.offset, "] Completed"
 
@@ -119,12 +146,12 @@ def ConvertStocksPriceToUSD(params):
 
 def SetStockPriceDataInDB(params):
 
+    print(params)
     ClientDB = motor.motor_tornado.MotorClient(params.connectionstring)
 
-    tab = params.value
-    d = dict()
-
-    for res in tab:
+    table = params.value
+    tab_price = []
+    for res in range(len(table)):
 
         gvkey = res[0]
         date = res[1]
@@ -150,21 +177,24 @@ def SetStockPriceDataInDB(params):
         curcdd = res[9]
         isin = res[11]
 
-        "{'_id','gvkey','date','curr','csho','vol','adj_factor','price_close','price_high',"
-        "'price_low','return','ret_usd','curr_to_usd','consensus','price_target'}"
+        try:
+            ID = isin+"_"+date_str + "_" + curcdd
 
-        data = {'_id': isin, 'gvkey': gvkey,'date': date, 'curr': curcdd, 'csho': csho, 'vol': vol, 'adj_factor': ajex,
-                'price_close': prccd, 'price_high': prchd, 'price_low': prcld, 'return': 0, 'return_usd': 0,
-                'curr_to_USD': None, 'consensus': {}, 'price_target': {}}
+            "{'_id','gvkey','date','curr','csho','vol','adj_factor','price_close','price_high',"
+            "'price_low','return','ret_usd','curr_to_usd','consensus','price_target'}"
 
-        if date_str in d:
-            d[date_str].append(data)
-        else:
-            d[date_str] = [data]
+            data = {'_id': ID, 'isin': isin, 'gvkey': gvkey,'date': date, 'curr': curcdd, 'csho': csho, 'vol': vol, 'adj_factor': ajex,
+                    'price_close': prccd, 'price_high': prchd, 'price_low': prcld, 'return': 0, 'return_usd': 0,
+                    'curr_to_USD': None, 'consensus': {}, 'price_target': {}}
 
-    for key in d:
-        tornado.ioloop.IOLoop.current().run_sync(
-                StocksMarketDataPrice(ClientDB, key, d[key]).SetStocksPriceInDB)
+
+            tab_price.append(UpdateOne({"_id": ID},data,upsert=True))
+
+        except TypeError:
+            "Currency is None"
+
+    tornado.ioloop.IOLoop.current().run_sync(
+                StocksMarketDataPrice(ClientDB, "ALL", tab_price).SetStocksPriceInDB)
 
     ClientDB.close()
-    return 'lot : [', params.position, "] Completed"
+    return 'lot : ', params.position, " Completed"

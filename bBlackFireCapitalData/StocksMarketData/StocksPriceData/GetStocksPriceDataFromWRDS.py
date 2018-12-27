@@ -14,13 +14,14 @@ from sqlalchemy import exc
 from pymongo import InsertOne, UpdateOne
 from aBlackFireCapitalClass.ClassCurrenciesData.ClassCurrenciesExchangeRatesData import CurrenciesExchangeRatesData
 from aBlackFireCapitalClass.ClassStocksMarketData.ClassStocksMarketDataPrice import StocksMarketDataPrice
-from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import secondary_processor, TestNoneValue
+from zBlackFireCapitalImportantFunctions.ConnectionString import ProdConnectionString
+from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import secondary_processor, TestNoneValue, profile
 
 table = collections.namedtuple('table', [
     'value', "position", "connectionstring","Global",
 ])
 
-OBSERVATION = 200000
+__OBSERVATION__ = 200000
 
 def GetStocksPriceData(params):
 
@@ -101,13 +102,13 @@ def GetStocksPriceData(params):
         return 'lot : ', params.position, " Completed"
 
     count = res.shape[0]
-    iter = int(count/OBSERVATION) if count % OBSERVATION == 0 else int(count/OBSERVATION) + 1
+    iter = int(count/__OBSERVATION__) if count % __OBSERVATION__ == 0 else int(count/__OBSERVATION__) + 1
     res =res.values
 
     pt = ()
     for v in range(iter):
-        start = v * OBSERVATION
-        end = (v + 1) * OBSERVATION
+        start = v * __OBSERVATION__
+        end = (v + 1) * __OBSERVATION__
         if end > count:
             end = count
         pt += table(value= res[start: end], position=[params.offset + start,params.offset + end],
@@ -198,3 +199,14 @@ def SetStockPriceDataInDB(params):
 
     ClientDB.close()
     return 'lot : ', params.position, " Completed"
+
+
+@profile
+def get_one_per():
+
+    ClientDB = motor.motor_tornado.MotorClient(ProdConnectionString)
+    date = datetime.datetime(2016,11,9,16,0,0,0)
+    tornado.ioloop.IOLoop.current().run_sync(
+                    StocksMarketDataPrice(ClientDB, "ALL", {"date": date},None).GetStocksPriceFromDB)
+
+get_one_per()

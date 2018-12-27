@@ -85,7 +85,7 @@ def GetVariation(tab):
     print(len(d))
     tab_result = []
     for key in d:
-       if
+      if
 
 
     GetVarPerMaskCode(d['716'])

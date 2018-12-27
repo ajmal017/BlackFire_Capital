@@ -1,9 +1,10 @@
+import asyncio
+
 import pymongo
 from tornado import gen
 
 
 class StocksMarketDataPrice:
-
     """This class allows to set and get the price of all the stocks from WRDS. \n" \
     "1. SetStocksPriceInDB is used to save the stock price data in the DB. The inputs " \
     "params (ClientDB, data to save in DB). The data to save is a dictionnary containing: " \
@@ -12,8 +13,7 @@ class StocksMarketDataPrice:
     " price data saved in DB. The inputs params (ClientDB, query, data to display)."""
 
     def __init__(self, database, date, *data):
-
-        self.database = database['stocks']['summary']
+        self.database = database['test']['summary']
         self.data = data
 
     def __str__(self):
@@ -28,7 +28,6 @@ class StocksMarketDataPrice:
 
     @gen.coroutine
     def SetStocksPriceInDB(self):
-
         """
             :param: {'_id','gvkey','date','curr','csho','vol','adj_factor','price_close','price_high',
                     "price_low','return','ret_usd','curr_to_usd','consensus','price_target'}
@@ -39,19 +38,31 @@ class StocksMarketDataPrice:
         count = yield self.database.count_documents({})
         print("Final count: %d" % count)
 
+    @gen.coroutine
     def GetStocksPriceFromDB(self):
-
-        tab_of_result = []
+        tab = []
         query = self.data[0]
-        to_display = self.data[1]
+        display = self.data[1]
+        cursor = self.database.find(query, display).sort('date', 1)
+        while (yield cursor.fetch_next):
+            tab.append(cursor.next_object())
 
-        for value in self.database.find(query, to_display):
-            tab_of_result.append(value)
+        return tab
 
-        return tab_of_result
+    async def SetManyStocksPriceInDB(self):
+
+        await asyncio.wait([self.SetStocksPriceInDB(self.database[data[0]], data[1]) for data in self.data[0]])
 
     def UpdateStocksPriceInDB(self):
 
         id = self.data[0]
         newvalue = self.data[1]
         self.database.update_one({'_id': id}, {'$set': newvalue})
+
+    @staticmethod
+    async def SetStocksPriceInDB(ClientDB, data):
+
+        try:
+            await ClientDB.bulk_write(data)
+        except pymongo.errors.BulkWriteError as bwe:
+            print(bwe.details)

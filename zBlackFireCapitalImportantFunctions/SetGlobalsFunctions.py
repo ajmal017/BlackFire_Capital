@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-
+import cProfile, pstats, io
 import pymongo
 import pandas as pd
 import numpy as np
@@ -134,12 +134,8 @@ def GenerateWorkingDailyTab(start_date, end_date):
 
 
 def TestNoneValue(value, v):
-    if value is not None:
-       if np.isnan(value) == True:
-            value = v
-    else:
+    if value is None or np.isnan(value) == True:
         value = v
-
     return value
 
 
@@ -324,3 +320,21 @@ def SetBackupOfDataBase(description):
 def RestoreBackupOfdataBase(fileName):
 
     restore("GhislainPougomNoubissie", "BlackFireCapitalIncFromBottomToTheTop", "/var/backups/mongo/"+fileName+".tbz")
+
+
+def profile(fnc):
+    """A decorator that uses cProfile to profile a function"""
+
+    def inner(*args, **kwargs):
+        pr = cProfile.Profile()
+        pr.enable()
+        retval = fnc(*args, **kwargs)
+        pr.disable()
+        s = io.StringIO()
+        sortby = 'cumulative'
+        ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+        ps.print_stats()
+        print(s.getvalue())
+        return retval
+
+    return inner

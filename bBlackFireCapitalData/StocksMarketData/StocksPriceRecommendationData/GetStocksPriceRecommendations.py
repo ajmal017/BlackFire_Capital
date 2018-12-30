@@ -14,6 +14,7 @@ import pandas as pd
 from pymongo import InsertOne
 import multiprocessing
 import collections
+from zBlackFireCapitalImportantFunctions.ConnectionString import TestConnectionString, ProdConnectionString
 from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import profile
 from aBlackFireCapitalClass.ClassCurrenciesData.ClassCurrenciesExchangeRatesData import CurrenciesExchangeRatesData
 from aBlackFireCapitalClass.ClassPriceRecommendationData.ClassPriceRecommendationDataInfos import \
@@ -34,8 +35,9 @@ params = table(type=type_consensus)
 def convertDateToString(date):
     return date.strftime('%Y-%m')
 
+
 def CalculateConsensusVar(gvkey_act, gvkey_prev, mask_code_act, mask_code_prev,date_act,
-                            date_prev, recom_act, recom_prev):
+                            date_prev, recom_act, recom_prev, em_act, em_prev):
 
     if gvkey_act != gvkey_prev:
         return None
@@ -43,18 +45,27 @@ def CalculateConsensusVar(gvkey_act, gvkey_prev, mask_code_act, mask_code_prev,d
         return None
     if (date_act - date_prev).days > 6*30:
         return None
+    if em_act!=em_prev:
+        return None
     return int(recom_act) - int(recom_prev)
 
 
-def BulkSetConsensusData(ticker, cusip, emaskcd, ireccd, anndats, amaskcd, gvkey, variation)
+def PatchMaskcd(amsk, emask):
+
+    if amsk == 0 or amsk is None:
+        return emask
+    else:
+        return amsk
+
+def BulkSetConsensusData(ticker, cusip, emaskcd, ireccd, anndats, amaskcd, gvkey, variation):
 
     return InsertOne({"ticker": ticker, "cusip": cusip, "emasckd": emaskcd,
-                      "recom": ireccd, "anndats": anndats, "amaskcd": amaskcd,
+                      "recom": ireccd, "anndats": datetime.datetime(anndats.year,anndats.month,anndats.day,16,0,0), "amaskcd": amaskcd,
                       "variation": variation, "gvkey": gvkey})
+
 
 @profile
 def GetStocksPriceRecommendations(params):
-
 
     if params.type == type_price_target:
 
@@ -113,8 +124,10 @@ def AddGvkeyToTable(params):
 
     CusipFilterTab = CusipFilterTab.drop_duplicates(entete)
     CusipFilterTab = CusipFilterTab[CusipFilterTab['gvkey'] != None]
+    CusipFilterTab = CusipFilterTab[entete]
     print(CusipFilterTab.columns)
-    # np.save(params.type + '_dataWithGVKEY.npy', CusipFilterTab)
+    np.save(params.type + '_dataWithGVKEY.npy', CusipFilterTab)
+
 
 @profile
 def CalculateRecommendationVar(params):
@@ -126,40 +139,89 @@ def CalculateRecommendationVar(params):
 
     if params.type == type_consensus:
         entete = ['ticker', 'cusip','emaskcd', 'ireccd', 'anndats', 'amaskcd', 'gvkey']
-        indice_for_var = [6, 5, 4, 3]
+        indice_for_var = [6, 5, 4, 3, 2]
 
     res = np.load(params.type + '_dataWithGVKEY.npy')
     res = pd.DataFrame(res, columns=entete)
     v = np.vectorize(convertDateToString)
     res['date'] = v(res['anndats'])
+    v = np.vectorize(PatchMaskcd)
+    res['Patchmask'] = v(res['amaskcd'], res['emaskcd'])
+
     res = res.sort_values(["gvkey","amaskcd","date"], ascending=[True, False,False])
     res = res.iloc[:].reset_index(drop=True)
     res_p = res.iloc[1:, indice_for_var].reset_index(drop=True)
     res = res.iloc[:-1]
     res = res.join(res_p, lsuffix=_ACTUAL_, rsuffix=_PREVIOUS_)
-    res = res.set_index('date')
 
-    if params == 'consensus':
+    if params.type == 'consensus':
         v = np.vectorize(CalculateConsensusVar)
         res['variation'] = v(res[entete[indice_for_var[0]] + _ACTUAL_], res[entete[indice_for_var[0]] + _PREVIOUS_],
                              res[entete[indice_for_var[1]] + _ACTUAL_], res[entete[indice_for_var[1]] + _PREVIOUS_],
                              res[entete[indice_for_var[2]] + _ACTUAL_], res[entete[indice_for_var[2]] + _PREVIOUS_],
-                             res[entete[indice_for_var[3]] + _ACTUAL_], res[entete[indice_for_var[3]] + _PREVIOUS_])
+                             res[entete[indice_for_var[3]] + _ACTUAL_], res[entete[indice_for_var[3]] + _PREVIOUS_],
+                             res[entete[indice_for_var[4]] + _ACTUAL_], res[entete[indice_for_var[4]] + _PREVIOUS_])
 
         v = np.vectorize(BulkSetConsensusData)
-        res['data'] = v(res['ticker'], res['cusip'], res['emaskcd'], res['ireccd'], res['anndats'], res['amaskcd'],
-                        res['gvkey'], res['variation'])
-        res = res[['date', 'data']]
+        res['data'] = v(res['ticker'], res['cusip'], res['emaskcd'+ _ACTUAL_], res['ireccd'+ _ACTUAL_], res['anndats' + _ACTUAL_],
+                        res['amaskcd' + _ACTUAL_], res['gvkey' + _ACTUAL_], res['variation'])
+        res = res[['date', 'data', 'gvkey' + _ACTUAL_, 'amaskcd' + _ACTUAL_, 'anndats' + _ACTUAL_, 'emaskcd' + _ACTUAL_]]
 
-# AddGvkeyToTable(params)
+    res = res.sort_values("date", ascending=True).reset_index(drop=True)
+
+    np.save(params.type + "_toSaveInDB", res)
+
 
 def SetDataToDB(params):
 
+    if params.type == type_price_target:
+        entete = ['ticker', 'cusip', 'estimid', 'horizon', 'value',
+                  'estcur', 'anndats', 'amaskcd', 'exrat', 'gvkey']
 
 
+    if params.type == type_consensus:
+        entete = ['date', 'data', 'gvkey', 'amaskcd', 'anndats','emaskcd']
+
+    res = np.load(params.type + "_toSaveInDB.npy")
+    res = pd.DataFrame(res, columns= entete)
+    # print(res[res['amaskcd'] == '0'][])
+    tabDate = GenerateMonthlyTab('1993-10', '2018-04')
+    tabInFile = []
+
+    for pos in range(len(tabDate)):
+
+        date_end = tabDate[pos]
+        pos_begin = pos - 6
+        if pos_begin < 0:
+            pos_begin = 0
+        pos_last = pos - 1
+        if pos_last < 0:
+            pos_last = 0
+        tabInFile.append([date_end, tabDate[pos_last], tabDate[pos_begin]])
+
+    res = res.set_index('date')
+    ClientDB = motor.motor_tornado.MotorClient(ProdConnectionString)
+
+    for value in tabInFile[1:]:
+
+        print(value)
+
+        tab = res.loc[value[2]: value[1]]
+        tab = tab.sort_values(["gvkey","amaskcd","anndats"], ascending=[True, False,False])
+        tab = tab.drop_duplicates(subset=["gvkey","amaskcd", "emaskcd"], keep="first")
+        toWrite = list(tab['data'])
+        tab = res.loc[value[0]]
+        toWrite += list(tab['data'])
+
+        loop = tornado.ioloop.IOLoop
+        loop.current().run_sync(PriceTargetAndconsensusValuesData(ClientDB, value[0],params.type, toWrite).SetValuesInDB)
+    ClientDB.close()
 
 
 # CalculateRecommendationVar(params)
+SetDataToDB(params)
+
+
 def ConvertPriceTagetToUSD(params):
 
     """ This function set the field curr_to_USD for all the price target in the DB.

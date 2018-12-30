@@ -5,7 +5,7 @@ class PriceTargetAndconsensusValuesData:
 
     def __init__(self, database, date, type, *data):
 
-        self.database = database['stocks'][type]
+        self.database = database['stocks'][type][date]
         self.data = data
         self.type = type
 
@@ -22,8 +22,8 @@ class PriceTargetAndconsensusValuesData:
 
         return description
 
-    @gen.coroutine
-    def SetValuesInDB(self):
+
+    async def SetValuesInDB(self):
 
         """
             :param: price_target: {'cusip','ticker','analyst','price','horizon','curr','
@@ -32,9 +32,10 @@ class PriceTargetAndconsensusValuesData:
             :param  consensus: {'cusip', 'ticker', 'analyst', 'recom', 'horizon',
                                 'date_activate','mask_code','variation'}."""
 
-        yield self.database.insert_many(self.data[0])
-        count = yield self.database.count_documents({})
-        print("Final count: %d" % count)
+        try:
+            await self.database.bulk_write(self.data[0])
+        except pymongo.errors.BulkWriteError as bwe:
+            print(bwe.details)
 
 
     @gen.coroutine

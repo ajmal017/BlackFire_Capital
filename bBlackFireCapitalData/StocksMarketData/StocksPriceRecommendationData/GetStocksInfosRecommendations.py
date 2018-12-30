@@ -1,19 +1,17 @@
-import pickle
+__author__ = 'pougomg'
+
 import motor
 import tornado
 import numpy as np
 import pandas as pd
+import wrds
 from pymongo import UpdateOne
 from bson.objectid import ObjectId
 
 from aBlackFireCapitalClass.ClassPriceRecommendationData.ClassPriceRecommendationDataInfos import \
     PriceTargetAndconsensusInfosData
-from aBlackFireCapitalClass.ClassStocksMarketData.ClassStocksMarketDataInfos import StocksMarketDataInfos
-from zBlackFireCapitalImportantFunctions.ConnectionString import TestConnectionString, ProdConnectionString
 from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import type_consensus, type_price_target
 
-__author__ = 'pougomg'
-import wrds
 
 def SetStocksInfosRecommendationsInDB(type, connectionstring):
 
@@ -62,9 +60,10 @@ def BulkSetData(_id, gvkey):
 
     return UpdateOne({"_id":ObjectId(_id)},{"$set":{"gvkey":gvkey}})
 
+
 def SetGvkeyToInfosRecommendations(type_, connectionstring):
 
-
+    """This function is used to assign a GVKEY for the stocks Infos for Recommendations"""
     # tabStocksInFosGvkey = []
     # for value in StocksInFosGvkeyList:
     #     tabStocksInFosGvkey.append([value["_id"], value['cusip'], value['ticker']])
@@ -93,14 +92,11 @@ def SetGvkeyToInfosRecommendations(type_, connectionstring):
     tabResult['data'] = v(tabResult['_id'], tabResult['gvkey'])
     print(tabResult[tabResult.gvkey == '062634'])
 
-    # data = list(tabResult['data'].values)
-    # ClientDB = motor.motor_tornado.MotorClient(connectionstring)
-    # tornado.\
-    #     ioloop.IOLoop.current().\
-    #     run_sync(PriceTargetAndconsensusInfosData(ClientDB,type_, data).SetInfosInDB)
-    #
-    # ClientDB.close()
+    data = list(tabResult['data'].values)
+    ClientDB = motor.motor_tornado.MotorClient(connectionstring)
+    tornado.\
+        ioloop.IOLoop.current().\
+        run_sync(PriceTargetAndconsensusInfosData(ClientDB,type_, data).SetInfosInDB)
 
+    ClientDB.close()
 
-SetGvkeyToInfosRecommendations('consensus', ProdConnectionString)
-# SetGvkeyToInfosRecommendations('price_target', ProdConnectionString)

@@ -8,9 +8,13 @@ import motor
 import tornado
 import wrds
 import datetime
+from sqlalchemy import exc
+import numpy as np
+import pandas as pd
+from pymongo import UpdateMany
 import multiprocessing
 import collections
-import pymongo
+from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import profile
 from aBlackFireCapitalClass.ClassCurrenciesData.ClassCurrenciesExchangeRatesData import CurrenciesExchangeRatesData
 from aBlackFireCapitalClass.ClassPriceRecommendationData.ClassPriceRecommendationDataInfos import \
     PriceTargetAndconsensusInfosData
@@ -20,152 +24,169 @@ from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import type_consens
     secondary_processor, GenerateMonthlyTab
 
 table = collections.namedtuple('table', [
-    'value', "position", "type", "connectionstring",
+    'type',
 ])
+_ACTUAL_ = '_act'
+_PREVIOUS_ = '_prev'
+params = table(type=type_consensus)
 
 
+def convertDateToString(date):
+    return date.strftime('%Y-%m')
+
+def CalculateConsensusVar(gvkey_act, gvkey_prev, mask_code_act, mask_code_prev,date_act,
+                            date_prev, recom_act, recom_prev):
+
+    if gvkey_act != gvkey_prev:
+        return None
+    if mask_code_act != mask_code_prev:
+        return None
+    if (date_act - date_prev).days > 6*30:
+        return None
+    return int(recom_act) - int(recom_prev)
+
+@profile
 def GetStocksPriceRecommendations(params):
 
-    db = wrds.Connection()
 
     if params.type == type_price_target:
-        entete = ['ticker', 'cusip', 'cname', 'estimid', 'horizon', 'value',
+
+        entete = ['ticker', 'cusip', 'estimid', 'horizon', 'value',
                   'estcur', 'anndats', 'amaskcd']
+        sqlstmt = 'select pt.*, B.exrat FROM(select ' + ','.join(entete) + ' FROM {schema}.{table}  ' \
+                    .format(schema='ibes', table='ptgdet',) +' ) As pt ' \
+                    'LEFT JOIN ibes.hdxrati B ON (pt.anndats = B.anndats AND pt.estcur = B.curr) '
+
     if params.type == type_consensus:
-        entete = ['ticker', 'cusip', 'cname', 'estimid', 'ireccd',
-                  'anndats', 'amaskcd']
+        entete = ['ticker', 'cusip','emaskcd', 'ireccd', 'anndats', 'amaskcd']
 
-    res = db.get_table(library=params.library,
-                       table=params.table,
-                       columns=entete,
-                       obs=params.observation,
-                       offset=params.offset)
-    db.close()
+        sqlstmt = 'select ' + ','.join(entete) + ' From {schema}.{table} '.format(
+            schema='ibes',
+            table='recddet',
+        )
 
-    dict_infos = dict()
-    tab_infos = []
+    try:
+        db = wrds.Connection()
+        res = db.raw_sql(sqlstmt)
+        db.close()
+        np.save(params.type + '_data', res)
 
-    ClientDB = motor.motor_tornado.MotorClient(params.connectionstring)
+    except exc.SQLAlchemyError as e:
+        print(e)
+        return "Error Loading File"
+    finally:
+        db.close()
+
+@profile
+def AddGvkeyToTable(params):
 
     if params.type == type_price_target:
-
-        for pos in range(res.shape[0]):
-
-            tic = res[entete[0]][pos]
-            cusip = res[entete[1]][pos]
-            cname = res[entete[2]][pos]
-            estim = res[entete[3]][pos]
-            hor = res[entete[4]][pos]
-            value = res[entete[5]][pos]
-            cur = res[entete[6]][pos]
-            date = res[entete[7]][pos]
-            mask_code = res[entete[8]][pos]
-
-            if cusip == None:
-                cusip = tic
-
-            yr = str(date.year)
-            if date.month < 10:
-                month = "0" + str(date.month)
-            else:
-                month = str(date.month)
-            if date.day < 10:
-                day = "0" + str(date.day)
-            else:
-                day = str(date.day)
-
-            date_str = yr + '-' + month
-            date = datetime.datetime(date.year, date.month, date.day, 16, 0, 0, 0)
-
-            data = {'cusip':cusip,'ticker': tic,'analyst':estim,'price':value,'horizon':hor,
-                    'curr':cur,'date_activate':date,'mask_code':mask_code,'variation':None,'price_usd':None}
-
-            # if dict_infos.get(date_str,False):
-            #     dict_infos[date_str].append(data)
-            # else:
-            #     dict_infos[date_str] = [data]
-            tab_infos.append(data)
-
+        entete = ['ticker', 'cusip', 'estimid', 'horizon', 'value',
+                  'estcur', 'anndats', 'amaskcd', 'exrat']
 
 
     if params.type == type_consensus:
-
-        for pos in range(res.shape[0]):
-
-            tic = res[entete[0]][pos]
-            cusip = res[entete[1]][pos]
-            cname = res[entete[2]][pos]
-            estim = res[entete[3]][pos]
-            value = res[entete[4]][pos]
-            date = res[entete[5]][pos]
-            mask_code = res[entete[6]][pos]
-
-            if cusip == None:
-                cusip = tic
-
-            yr = str(date.year)
-            if date.month < 10:
-                month = "0" + str(date.month)
-            else:
-                month = str(date.month)
-            if date.day < 10:
-                day = "0" + str(date.day)
-            else:
-                day = str(date.day)
-
-            date_str = yr + '-' + month
-            date = datetime.datetime(date.year, date.month, date.day, 16, 0, 0, 0)
-
-            "'consensus': {'cusip', 'ticker', 'analyst', 'recom', "" \
-                    ""'horizon','date_activate','mask_code','variation'}"
-            data = {'cusip': cusip, 'ticker': tic, 'analyst': estim, 'recom': value, 'horizon': 6
-                    ,'date_activate': date, 'mask_code': mask_code, 'variation': None}
-
-            # if dict_infos.get(date_str,False):
-            #     dict_infos[date_str].append(data)
-            # else:
-            #     dict_infos[date_str] = [data]
-            tab_infos.append(data)
-
-    print("Start Pushing")
-
-    data = []
+        entete = ['ticker', 'cusip','emaskcd', 'ireccd', 'anndats', 'amaskcd']
 
 
-    # print(tab_infos)
-    tornado.ioloop.IOLoop.current().run_sync(
-                PriceTargetAndconsensusValuesData(ClientDB, "ALL", params.type, tab_infos).SetValuesInDB)
-    ClientDB.close()
+    res = np.load(params.type + '_data.npy',)
+    tabStocksInfosGvkey = np.load('tabStocksInFosGvkey.npy')
 
-    return 'lot : [', params.offset, ", ", params.observation + params.offset, "] Completed"
+    res = pd.DataFrame(res, columns=entete)
+    tabStocksInfosGvkey = pd.DataFrame(tabStocksInfosGvkey, columns=['gvkey', 'cusip', 'ticker'])
+
+    CusipFilterTab = res[res['cusip'] != None]
+    TickerFilterTab = res[res['ticker'] != None]
+
+    CusipFilterTab = pd.merge(CusipFilterTab, tabStocksInfosGvkey[['gvkey', 'cusip',]].drop_duplicates('cusip'), on='cusip').reset_index()
+    TickerFilterTab = pd.merge(TickerFilterTab, tabStocksInfosGvkey[['gvkey', 'ticker',]].drop_duplicates('ticker'), on='ticker').reset_index()
+
+    CusipFilterTab = CusipFilterTab.append(TickerFilterTab)
+    entete.append('gvkey')
+
+    CusipFilterTab = CusipFilterTab.drop_duplicates(entete)
+    CusipFilterTab = CusipFilterTab[CusipFilterTab['gvkey'] != None]
+    print(CusipFilterTab.columns)
+    # np.save(params.type + '_dataWithGVKEY.npy', CusipFilterTab)
+
+@profile
+def CalculateRecommendationVar(params):
+
+    if params.type == type_price_target:
+        entete = ['ticker', 'cusip', 'estimid', 'horizon', 'value',
+                  'estcur', 'anndats', 'amaskcd', 'exrat', 'gvkey']
 
 
+    if params.type == type_consensus:
+        entete = ['ticker', 'cusip','emaskcd', 'ireccd', 'anndats', 'amaskcd', 'gvkey']
+        indice_for_var = [6, 5, 4, 3]
+
+    res = np.load(params.type + '_dataWithGVKEY.npy')
+    res = pd.DataFrame(res, columns=entete)
+    v = np.vectorize(convertDateToString)
+    res['date'] = v(res['anndats'])
+    res = res.sort_values(["gvkey","amaskcd","date"], ascending=[True, False,False])
+    res = res.iloc[:].reset_index(drop=True)
+    res_p = res.iloc[1:, indice_for_var].reset_index(drop=True)
+    res = res.iloc[:-1]
+    res = res.join(res_p, lsuffix=_ACTUAL_, rsuffix=_PREVIOUS_)
+
+    if params == 'consensus':
+            v = np.vectorize(CalculateConsensusVar)
+            res['variation'] = v(res[entete[indice_for_var[0]] + _ACTUAL_], res[entete[indice_for_var[0]] + _PREVIOUS_],
+                                 res[entete[indice_for_var[1]] + _ACTUAL_], res[entete[indice_for_var[1]] + _PREVIOUS_],
+                                 res[entete[indice_for_var[2]] + _ACTUAL_], res[entete[indice_for_var[2]] + _PREVIOUS_],
+                                 res[entete[indice_for_var[3]] + _ACTUAL_], res[entete[indice_for_var[3]] + _PREVIOUS_])
+
+    print(res)
+AddGvkeyToTable(params)
+
+# CalculateRecommendationVar(params)
 def ConvertPriceTagetToUSD(params):
 
-    date = params.date
-    ClientDB = pymongo.MongoClient("mongodb://localhost:27017/")
+    """ This function set the field curr_to_USD for all the price target in the DB.
+        curr_to_USD is the exchange rate from the base currency to USD at the date of the
+        stocks price target.
+         params.connectionstring:  the Connection url to the MongoDB
+         params.currency:  the currency to convert
 
-    list_sp = PriceTargetAndconsensusValuesData(ClientDB, date, type_price_target, {}, None).GetValuesFromDB()
+        :return: Status Done
+    """
 
-    for pt in list_sp:
+    ClientDB = motor.motor_tornado.MotorClient(params.connectionstring)
+    currency = params.currency
 
-        id = pt['_id']
-        curr = pt['curr']
-        tab_rate = CurrenciesExchangeRatesData(ClientDB,{'from':'USD', 'to': curr, 'date': date}, None)\
-            .GetExchangeRatesEndofMonthFromDB()
+    tab_currency = tornado.\
+        ioloop.\
+        IOLoop.\
+        current()\
+        .run_sync(CurrenciesExchangeRatesData(ClientDB,{'from':'USD', 'to': currency}, None)
+                  .GetExchangeRatesFromDB)
 
-        for value in tab_rate:
-
+    print(currency, tab_currency[0]['date'], tab_currency[-1]['date'])
+    BulkOp = []
+    for value in tab_currency:
+        if value['date'] > datetime.datetime(1980,1,1):
             try:
-                price_usd = pt['price']/value['rate']
-            except ZeroDivisionError:
-                price_usd = None
-            except TypeError:
-                price_usd = None
 
-            PriceTargetAndconsensusValuesData(ClientDB, date,type_price_target,id,{'price_usd': price_usd}).UpdateValuesInDB()
+                date = value['date']
+                rate = "{0:.4f}".format(1/value['rate'])
+                query = {"date_activate": date, "curr":currency}
+                newValue = {"curr_to_USD": rate}
+                BulkOp.append(UpdateMany(query,{"$set": newValue}))
+
+            except TypeError:
+
+                print('problem: '+ currency + ' at date '+ date)
+
+    tornado.\
+        ioloop.\
+        IOLoop.\
+        current()\
+        .run_sync(PriceTargetAndconsensusValuesData(ClientDB,'','price_target', BulkOp).UpdateValuesInDB)
 
     ClientDB.close()
+    return currency + ' Completed'
 
 def PatchStocksPriceRecommendations(params):
 

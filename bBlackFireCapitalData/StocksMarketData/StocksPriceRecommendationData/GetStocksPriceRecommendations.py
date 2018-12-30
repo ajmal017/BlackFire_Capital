@@ -11,7 +11,7 @@ import datetime
 from sqlalchemy import exc
 import numpy as np
 import pandas as pd
-from pymongo import UpdateMany
+from pymongo import InsertOne
 import multiprocessing
 import collections
 from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import profile
@@ -44,6 +44,13 @@ def CalculateConsensusVar(gvkey_act, gvkey_prev, mask_code_act, mask_code_prev,d
     if (date_act - date_prev).days > 6*30:
         return None
     return int(recom_act) - int(recom_prev)
+
+
+def BulkSetConsensusData(ticker, cusip, emaskcd, ireccd, anndats, amaskcd, gvkey, variation)
+
+    return InsertOne({"ticker": ticker, "cusip": cusip, "emasckd": emaskcd,
+                      "recom": ireccd, "anndats": anndats, "amaskcd": amaskcd,
+                      "variation": variation, "gvkey": gvkey})
 
 @profile
 def GetStocksPriceRecommendations(params):
@@ -130,16 +137,27 @@ def CalculateRecommendationVar(params):
     res_p = res.iloc[1:, indice_for_var].reset_index(drop=True)
     res = res.iloc[:-1]
     res = res.join(res_p, lsuffix=_ACTUAL_, rsuffix=_PREVIOUS_)
+    res = res.set_index('date')
 
     if params == 'consensus':
-            v = np.vectorize(CalculateConsensusVar)
-            res['variation'] = v(res[entete[indice_for_var[0]] + _ACTUAL_], res[entete[indice_for_var[0]] + _PREVIOUS_],
-                                 res[entete[indice_for_var[1]] + _ACTUAL_], res[entete[indice_for_var[1]] + _PREVIOUS_],
-                                 res[entete[indice_for_var[2]] + _ACTUAL_], res[entete[indice_for_var[2]] + _PREVIOUS_],
-                                 res[entete[indice_for_var[3]] + _ACTUAL_], res[entete[indice_for_var[3]] + _PREVIOUS_])
+        v = np.vectorize(CalculateConsensusVar)
+        res['variation'] = v(res[entete[indice_for_var[0]] + _ACTUAL_], res[entete[indice_for_var[0]] + _PREVIOUS_],
+                             res[entete[indice_for_var[1]] + _ACTUAL_], res[entete[indice_for_var[1]] + _PREVIOUS_],
+                             res[entete[indice_for_var[2]] + _ACTUAL_], res[entete[indice_for_var[2]] + _PREVIOUS_],
+                             res[entete[indice_for_var[3]] + _ACTUAL_], res[entete[indice_for_var[3]] + _PREVIOUS_])
 
-    print(res)
-AddGvkeyToTable(params)
+        v = np.vectorize(BulkSetConsensusData)
+        res['data'] = v(res['ticker'], res['cusip'], res['emaskcd'], res['ireccd'], res['anndats'], res['amaskcd'],
+                        res['gvkey'], res['variation'])
+        res = res[['date', 'data']]
+
+# AddGvkeyToTable(params)
+
+def SetDataToDB(params):
+
+
+
+
 
 # CalculateRecommendationVar(params)
 def ConvertPriceTagetToUSD(params):

@@ -121,45 +121,45 @@ if __name__ == '__main__':
 
     print("5. Download Stock Price Data,")
 
-    db = wrds.Connection()
-    count = db.get_row_count(library="comp",
-                            table="secd")
-    db.close()
-    observ = 1000000
-    iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
-    pt = ()
-    for v in range(iter):
-        pt += StocksPriceParams(library='comp',
-                                table='secd',
-                                observation=observ,
-                                offset=v * 1000000,
-                                globalWRDS= False,
-                                connectionstring=ProdConnectionString),
-    pool = MyPool(2)
-    result = pool.map(GetStocksPriceData, pt)
-    pool.close()
-    pool.join()
-    print(result)
-
-    db = wrds.Connection()
-    count = db.get_row_count(library="comp",
-                             table="g_secd")
-    db.close()
-    observ = 1000000
-    iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
-    pt = ()
-    for v in range(iter):
-       pt += StocksPriceParams(library='comp',
-                                table='g_secd',
-                                observation=observ,
-                                offset=v * 1000000,
-                                globalWRDS=True,
-                               connectionstring=ProdConnectionString),
-    pool = MyPool(2)
-    result = pool.map(GetStocksPriceData, pt)
-    pool.close()
-    pool.join()
-    print(result)
+    # db = wrds.Connection()
+    # count = db.get_row_count(library="comp",
+    #                         table="secd")
+    # db.close()
+    # observ = 1000000
+    # iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
+    # pt = ()
+    # for v in range(iter):
+    #     pt += StocksPriceParams(library='comp',
+    #                             table='secd',
+    #                             observation=observ,
+    #                             offset=v * 1000000,
+    #                             globalWRDS= False,
+    #                             connectionstring=ProdConnectionString),
+    # pool = MyPool(2)
+    # result = pool.map(GetStocksPriceData, pt)
+    # pool.close()
+    # pool.join()
+    # print(result)
+    #
+    # db = wrds.Connection()
+    # count = db.get_row_count(library="comp",
+    #                          table="g_secd")
+    # db.close()
+    # observ = 1000000
+    # iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
+    # pt = ()
+    # for v in range(iter):
+    #    pt += StocksPriceParams(library='comp',
+    #                             table='g_secd',
+    #                             observation=observ,
+    #                             offset=v * 1000000,
+    #                             globalWRDS=True,
+    #                            connectionstring=ProdConnectionString),
+    # pool = MyPool(2)
+    # result = pool.map(GetStocksPriceData, pt)
+    # pool.close()
+    # pool.join()
+    # print(result)
 
     print("6. Set currency in the Stocks Price: TO DO")
 
@@ -181,41 +181,42 @@ if __name__ == '__main__':
                              table="ptgdet")
     db.close()
     print(count)
-    observ = 1000000
-    iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
-    pt = ()
-    for v in range(iter):
-       pt += StocksRecommentdationsParams(library='ibes',
-                                          table='ptgdet',
-                                          observation=observ,
-                                          offset=v * 1000000,
-                                          type= type_price_target,
-                                          connectionstring=ProdConnectionString),
-    pool = MyPool(2)
-    result = pool.map(GetStocksPriceRecommendations, pt)
-    pool.close()
-    pool.join()
-    print(result)
+    # observ = 1000000
+    # iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
+    # pt = ()
+    # for v in range(iter):
+    #    pt += StocksRecommentdationsParams(library='ibes',
+    #                                       table='ptgdet',
+    #                                       observation=observ,
+    #                                       offset=v * 1000000,
+    #                                       type= type_price_target,
+    #                                       connectionstring=ProdConnectionString),
+    # pool = MyPool(2)
+    # result = pool.map(GetStocksPriceRecommendations, pt)
+    # pool.close()
+    # pool.join()
+    # print(result)
 
     db = wrds.Connection()
     count = db.get_row_count(library="ibes",
                              table="recddet")
     db.close()
-    observ = 1000000
-    iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
-    pt = ()
-    for v in range(iter):
-       pt += StocksRecommentdationsParams(library='ibes',
-                                          table='recddet',
-                                          observation=observ,
-                                          offset=v * 1000000,
-                                          type= type_consensus,
-                                          connectionstring=ProdConnectionString),
-    pool = MyPool(2)
-    result = pool.map(GetStocksPriceRecommendations, pt)
-    pool.close()
-    pool.join()
-    print(result)
+    print(count)
+    # observ = 1000000
+    # iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
+    # pt = ()
+    # for v in range(iter):
+    #    pt += StocksRecommentdationsParams(library='ibes',
+    #                                       table='recddet',
+    #                                       observation=observ,
+    #                                       offset=v * 1000000,
+    #                                       type= type_consensus,
+    #                                       connectionstring=ProdConnectionString),
+    # pool = MyPool(2)
+    # result = pool.map(GetStocksPriceRecommendations, pt)
+    # pool.close()
+    # pool.join()
+    # print(result)
 
 
 "7. Set all Price target to USD"

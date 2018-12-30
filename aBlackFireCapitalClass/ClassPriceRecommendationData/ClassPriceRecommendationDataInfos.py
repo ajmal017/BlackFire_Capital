@@ -23,7 +23,7 @@ class PriceTargetAndconsensusInfosData:
 
         """ {'cusip'(_id), 'comn', ticker}"""
         try:
-            yield self.database.insert_many(self.data[0])
+            yield self.database.bulk_write(self.data[0])
             count = yield self.database.count_documents({})
             print("Final count: %d" % count)
         except pymongo.errors.BulkWriteError as bwe:
@@ -38,9 +38,10 @@ class PriceTargetAndconsensusInfosData:
         query = self.data[0]
         display = self.data[1]
         tab = []
+        cursor = self.database.find(query, display)
 
-        for value in self.database.find(query, display):
-            tab.append(value)
+        while (yield from cursor.fetch_next) :
+            tab.append(cursor.next_object())
         return tab
 
     @gen.coroutine

@@ -13,7 +13,7 @@ class StocksMarketDataPrice:
     " price data saved in DB. The inputs params (ClientDB, query, data to display)."""
 
     def __init__(self, database, date, *data):
-        self.database = database['test']['summary']
+        self.database = database['stocks']['summary']
         self.data = data
 
     def __str__(self):
@@ -53,11 +53,17 @@ class StocksMarketDataPrice:
 
         await asyncio.wait([self.SetStocksPriceInDB(self.database[data[0]], data[1]) for data in self.data[0]])
 
+
+    @gen.coroutine
     def UpdateStocksPriceInDB(self):
 
-        id = self.data[0]
+        query = self.data[0]
         newvalue = self.data[1]
-        self.database.update_one({'_id': id}, {'$set': newvalue})
+
+        try:
+            yield self.database.update_many(query, {'$set': newvalue})
+        except pymongo.errors.BulkWriteError as bwe:
+            print(bwe.details)
 
     @staticmethod
     async def SetStocksPriceInDB(ClientDB, data):
@@ -66,3 +72,17 @@ class StocksMarketDataPrice:
             await ClientDB.bulk_write(data)
         except pymongo.errors.BulkWriteError as bwe:
             print(bwe.details)
+
+
+    async def GetListOfCurrencyFromDB(self):
+
+        cursor= await self.database.distinct("curr")
+
+        return cursor
+
+    @gen.coroutine
+    def SetIndexCreation(self):
+
+        index = self.data[0]
+
+        yield self.database.create_index(index)

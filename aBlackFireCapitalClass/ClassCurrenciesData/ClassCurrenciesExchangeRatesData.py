@@ -41,7 +41,6 @@ class CurrenciesExchangeRatesData:
         cursor = self.database.find(query, display).sort('date', 1)
         while (yield cursor.fetch_next):
             tab.append(cursor.next_object())
-
         return tab
 
     async def GetExchangeRatesEndofMonthFromDB(self):
@@ -49,9 +48,13 @@ class CurrenciesExchangeRatesData:
         """This function is used to get the last rate of the month. query= {'_id': {'$regex':'^USD_EUR_2015-01'}}"""
         query = self.data[0]
         display = self.data[1]
-        cursor = self.database.find(query, display).sort('date', -1).limit(1)
-        v = None
 
-        for value in await cursor.to_list(length = 1):
-            v = value
-        return v
+        value = await self.database.find(query, display).sort('date', -1).limit(1)
+
+        return value
+
+    async def GetListOfCurrencyFromDB(self):
+
+        cursor= await self.database.distinct("to")
+
+        return cursor

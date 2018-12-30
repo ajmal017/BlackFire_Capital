@@ -1,13 +1,5 @@
 import pymongo
 from tornado import gen
-import multiprocessing
-import collections
-
-from concurrent.futures import ProcessPoolExecutor
-
-StocksRec = collections.namedtuple('StocksRec',[
-    'month',
-    'data',])
 
 class PriceTargetAndconsensusValuesData:
 
@@ -57,12 +49,14 @@ class PriceTargetAndconsensusValuesData:
 
         return tab
 
+    @gen.coroutine
     def UpdateValuesInDB(self):
 
-        id = self.data[0]
-        newvalue = self.data[1]
+        try:
+            yield self.database.bulk_write(self.data[0], ordered=False)
+        except pymongo.errors.BulkWriteError as bwe:
+            print(bwe.details)
 
-        self.database.update({'_id': id}, {'$set': newvalue})
 
 
 

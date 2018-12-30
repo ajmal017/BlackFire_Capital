@@ -18,17 +18,18 @@ class StocksMarketDataInfos():
         "{'_id', 'company name', 'incorporation location', 'naics', 'sic', 'gic sector','gic ind'"
         "'eco zone', 'stock identification'}"
 
-        yield self.database.insert_many(self.data[0])
+        yield self.database.bulk_write(self.data[0])
         count = yield self.database.count_documents({})
         print("Final count: %d" % count)
 
-    def GetDataFromDB(self):
+    async def GetDataFromDB(self):
 
         tab_of_result = []
         query = self.data[0]
         to_display = self.data[1]
-        for value in self.database.find(query, to_display):
-            tab_of_result.append(value)
+        cursor = self.database.find(query, to_display)
+        async for document in cursor:
+            tab_of_result.append(document)
 
         return tab_of_result
 

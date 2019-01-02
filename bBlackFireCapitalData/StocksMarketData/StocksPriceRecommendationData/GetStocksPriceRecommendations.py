@@ -184,14 +184,14 @@ def SetDataToDB(params):
 
     res = np.load(params.type + "_toSaveInDB.npy")
     res = pd.DataFrame(res, columns= entete)
-    # print(res[res['amaskcd'] == '0'][])
+
     tabDate = GenerateMonthlyTab('1993-10', '2018-04')
     tabInFile = []
 
     for pos in range(len(tabDate)):
 
         date_end = tabDate[pos]
-        pos_begin = pos - 6
+        pos_begin = pos - 5
         if pos_begin < 0:
             pos_begin = 0
         pos_last = pos - 1
@@ -201,6 +201,10 @@ def SetDataToDB(params):
 
     res = res.set_index('date')
     ClientDB = motor.motor_tornado.MotorClient(ProdConnectionString)
+    tabDate = GenerateMonthlyTab('1994-03', '19988-02')
+
+    for v in tabDate:
+        ClientDB['stocks']['consensus'][v].drop()
 
     for value in tabInFile[1:]:
 

@@ -29,15 +29,23 @@ table = collections.namedtuple('table', [
 ])
 _ACTUAL_ = '_act'
 _PREVIOUS_ = '_prev'
-params = table(type=type_consensus)
+params = table(type=type_price_target)
 
+entete = ['anndats', 'curr', 'exrat']
 
+exrate = np.load('exrates.npy')
+exrate = pd.DataFrame(exrate,columns=entete)
+
+exr = exrate[(exrate['anndats'].isin([datetime.date(2018,4,11) - datetime.timedelta(days=i) for i in range(1,6)]))
+          & (exrate['curr'] == 'ZWK')].sort_values('anndats', ascending=False).reset_index()
+print(exr['exrat'])
+print(exr['exrat'][0])
 def convertDateToString(date):
     return date.strftime('%Y-%m')
 
 
 def CalculateConsensusVar(gvkey_act, gvkey_prev, mask_code_act, mask_code_prev,date_act,
-                            date_prev, recom_act, recom_prev, em_act, em_prev):
+                            date_prev, recom_act, recom_prev):
 
     if gvkey_act != gvkey_prev:
         return None
@@ -45,17 +53,53 @@ def CalculateConsensusVar(gvkey_act, gvkey_prev, mask_code_act, mask_code_prev,d
         return None
     if (date_act - date_prev).days > 6*30:
         return None
-    if em_act!=em_prev:
-        return None
     return int(recom_act) - int(recom_prev)
 
 
-def PatchMaskcd(amsk, emask):
+def CalculatePriceTargetVar(gvkey_act, gvkey_prev, mask_code_act, mask_code_prev,date_act,
+                            date_prev, recom_act, recom_prev, curr_act, curr_prev, exchg_act, exchg_prev, horizon):
 
-    if amsk == 0 or amsk is None:
+    if gvkey_act != gvkey_prev:
+        return None
+    if mask_code_act != mask_code_prev:
+        return None
+    if (date_act - date_prev).days > horizon*30:
+        return None
+    if curr_act == curr_prev:
+        try:
+            return -1 + recom_act/recom_prev
+        except ZeroDivisionError:
+            return None
+        except TypeError:
+            return None
+    else:
+        try:
+            return -1 + (recom_act* exchg_act)/(recom_prev * exchg_prev)
+        except ZeroDivisionError:
+            return None
+        except TypeError:
+            return None
+
+
+def PatchMaskcd(amask, emask):
+
+    if amask == 0 or amask is None or np.isnan(amask):
         return emask
     else:
-        return amsk
+        return str(amask)
+
+
+def PatchExrates(exrates, anndats, curr):
+
+    if np.isnan(exrates) or exrates is None or exrates == 0:
+        exr = exrate[(exrate['anndats'].isin([anndats - datetime.timedelta(days=i) for i in range(1,6)]))
+          & (exrate['curr'] == curr)].sort_values('anndats', ascending=False).reset_index()
+        if exr.shape[0] > 0:
+            return exr['exrat'][0]
+        return None
+    else:
+        return exrates
+
 
 def BulkSetConsensusData(ticker, cusip, emaskcd, ireccd, anndats, amaskcd, gvkey, variation):
 
@@ -99,25 +143,50 @@ def GetStocksPriceRecommendations(params):
 def AddGvkeyToTable(params):
 
     if params.type == type_price_target:
-        entete = ['ticker', 'cusip', 'estimid', 'horizon', 'value',
+        entete = ['ticker', 'cusip', 'emaskcd', 'horizon', 'value',
                   'estcur', 'anndats', 'amaskcd', 'exrat']
+        res = np.load(params.type + '_data.npy')
+        res = pd.DataFrame(res, columns=entete)
+        v = np.vectorize(PatchMaskcd)
+        res['Pamaskcd'] = v(res['amaskcd'], res['emaskcd'])
+        print(res.dropna(subset=['exrat']).shape)
+        v = np.vectorize(PatchExrates)
+        res['Pexrat'] = v(res['exrat'], res['anndats'], res['estcur'])
+        print(res.dropna(subset=['exrat']).shape)
+        entete[7] = 'Pamaskcd'
+        entete[8] = 'Pexrat'
 
+        res = res[entete]
 
     if params.type == type_consensus:
+
         entete = ['ticker', 'cusip','emaskcd', 'ireccd', 'anndats', 'amaskcd']
+        res = np.load(params.type + '_data.npy')
+        res = pd.DataFrame(res, columns=entete)
+        v = np.vectorize(PatchMaskcd)
+        res['Pamaskcd'] = v(res['amaskcd'], res['emaskcd'])
+        entete[5] = 'Pamaskcd'
+        res = res[entete]
 
 
-    res = np.load(params.type + '_data.npy',)
     tabStocksInfosGvkey = np.load('tabStocksInFosGvkey.npy')
 
-    res = pd.DataFrame(res, columns=entete)
+
     tabStocksInfosGvkey = pd.DataFrame(tabStocksInfosGvkey, columns=['gvkey', 'cusip', 'ticker'])
 
     CusipFilterTab = res[res['cusip'] != None]
-    TickerFilterTab = res[res['ticker'] != None]
+    CusipFilterTab = CusipFilterTab.dropna(subset=['cusip'])
 
-    CusipFilterTab = pd.merge(CusipFilterTab, tabStocksInfosGvkey[['gvkey', 'cusip',]].drop_duplicates('cusip'), on='cusip').reset_index()
-    TickerFilterTab = pd.merge(TickerFilterTab, tabStocksInfosGvkey[['gvkey', 'ticker',]].drop_duplicates('ticker'), on='ticker').reset_index()
+    TickerFilterTab = res[res['ticker'] != None]
+    TickerFilterTab = TickerFilterTab.dropna(subset=['ticker'])
+
+    t = tabStocksInfosGvkey[['gvkey', 'cusip',]].drop_duplicates('cusip')
+    t = t.dropna(subset=['cusip'])
+    CusipFilterTab = pd.merge(CusipFilterTab, t, on='cusip').reset_index()
+
+    t = tabStocksInfosGvkey[['gvkey', 'ticker',]].drop_duplicates('ticker')
+    t = t.dropna(subset=['ticker'])
+    TickerFilterTab = pd.merge(TickerFilterTab, t, on='ticker').reset_index()
 
     CusipFilterTab = CusipFilterTab.append(TickerFilterTab)
     entete.append('gvkey')
@@ -125,15 +194,17 @@ def AddGvkeyToTable(params):
     CusipFilterTab = CusipFilterTab.drop_duplicates(entete)
     CusipFilterTab = CusipFilterTab[CusipFilterTab['gvkey'] != None]
     CusipFilterTab = CusipFilterTab[entete]
+
     print(CusipFilterTab.columns)
     np.save(params.type + '_dataWithGVKEY.npy', CusipFilterTab)
 
+AddGvkeyToTable(params)
 
 @profile
 def CalculateRecommendationVar(params):
 
     if params.type == type_price_target:
-        entete = ['ticker', 'cusip', 'estimid', 'horizon', 'value',
+        entete = ['ticker', 'cusip', 'emaskcd', 'horizon', 'value',
                   'estcur', 'anndats', 'amaskcd', 'exrat', 'gvkey']
 
 
@@ -143,10 +214,9 @@ def CalculateRecommendationVar(params):
 
     res = np.load(params.type + '_dataWithGVKEY.npy')
     res = pd.DataFrame(res, columns=entete)
+
     v = np.vectorize(convertDateToString)
     res['date'] = v(res['anndats'])
-    v = np.vectorize(PatchMaskcd)
-    res['Patchmask'] = v(res['amaskcd'], res['emaskcd'])
 
     res = res.sort_values(["gvkey","amaskcd","date"], ascending=[True, False,False])
     res = res.iloc[:].reset_index(drop=True)
@@ -154,24 +224,27 @@ def CalculateRecommendationVar(params):
     res = res.iloc[:-1]
     res = res.join(res_p, lsuffix=_ACTUAL_, rsuffix=_PREVIOUS_)
 
-    if params.type == 'consensus':
+    if params.type == type_consensus:
         v = np.vectorize(CalculateConsensusVar)
         res['variation'] = v(res[entete[indice_for_var[0]] + _ACTUAL_], res[entete[indice_for_var[0]] + _PREVIOUS_],
                              res[entete[indice_for_var[1]] + _ACTUAL_], res[entete[indice_for_var[1]] + _PREVIOUS_],
                              res[entete[indice_for_var[2]] + _ACTUAL_], res[entete[indice_for_var[2]] + _PREVIOUS_],
-                             res[entete[indice_for_var[3]] + _ACTUAL_], res[entete[indice_for_var[3]] + _PREVIOUS_],
-                             res[entete[indice_for_var[4]] + _ACTUAL_], res[entete[indice_for_var[4]] + _PREVIOUS_])
+                             res[entete[indice_for_var[3]] + _ACTUAL_], res[entete[indice_for_var[3]] + _PREVIOUS_])
 
         v = np.vectorize(BulkSetConsensusData)
         res['data'] = v(res['ticker'], res['cusip'], res['emaskcd'+ _ACTUAL_], res['ireccd'+ _ACTUAL_], res['anndats' + _ACTUAL_],
                         res['amaskcd' + _ACTUAL_], res['gvkey' + _ACTUAL_], res['variation'])
-        res = res[['date', 'data', 'gvkey' + _ACTUAL_, 'amaskcd' + _ACTUAL_, 'anndats' + _ACTUAL_, 'emaskcd' + _ACTUAL_]]
+        res = res[['date', 'data', 'gvkey' + _ACTUAL_, 'amaskcd' + _ACTUAL_, 'anndats' + _ACTUAL_, 'emaskcd']]
+
+    if params.type == type_price_target:
+        v = np.vectorize(CalculatePriceTargetVar)
+        res['variation'] = v()
 
     res = res.sort_values("date", ascending=True).reset_index(drop=True)
 
     np.save(params.type + "_toSaveInDB", res)
 
-
+# CalculateRecommendationVar(params)
 def SetDataToDB(params):
 
     if params.type == type_price_target:
@@ -220,10 +293,6 @@ def SetDataToDB(params):
         loop = tornado.ioloop.IOLoop
         loop.current().run_sync(PriceTargetAndconsensusValuesData(ClientDB, value[0],params.type, toWrite).SetValuesInDB)
     ClientDB.close()
-
-
-# CalculateRecommendationVar(params)
-SetDataToDB(params)
 
 
 def ConvertPriceTagetToUSD(params):

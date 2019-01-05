@@ -74,7 +74,11 @@ def GenerateMonthlyTab(start_date, end_date):
     for yr in range(start_year, end_year + 1):
 
         for month in range(1, 13):
-            date = str(yr) + '-' + str(month)
+            t = str(month)
+            if month < 10:
+                t = '0'+ str(month)
+
+            date = str(yr) + '-' + t
             if date == start_date:
                 b = True
             if b:

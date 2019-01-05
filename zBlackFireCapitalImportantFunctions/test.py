@@ -1,5 +1,3 @@
-from timeit import timeit
-
 import motor
 import tornado
 import wrds
@@ -16,6 +14,7 @@ from pymongo import InsertOne
 
 _ACTUAL_ = '_act'
 _PREVIOUS_ = '_prev'
+
 def applyChecking(isin_or_cusip, gvkey, date, curr, csho, vol, adj_factor, price_close,
                   price_high, price_low, iid, exrate):
     return InsertOne({'isin_or_cusip': isin_or_cusip,

@@ -9,27 +9,27 @@ import multiprocessing
 import multiprocessing.pool
 import numpy as np
 import time
+from aBlackFireCapitalClass.ClassStocksMarketData.ClassStocksMarketDataInfos import StocksMarketDataInfos
 
-from bBlackFireCapitalData.CountriesEconomicsData.CountriesExchangeRatesData.GetExchangeRatesData import \
-    SetExchangeRatesCurrencyInDB
-from bBlackFireCapitalData.StocksMarketData.StocksPriceData.GetStocksInfosDataFromWRDS import SetStocksInfosDataInDB, \
-    GetStocksInfosDataDict
-from bBlackFireCapitalData.CountriesEconomicsData.CountriesEconomicsZoneData.GetCountriesEconomicsZoneData import \
-    SetCountriesEconomicsZonesInDB, SetCountriesEconomicsZonesForStocksInDB
-from bBlackFireCapitalData.MergeStocksData.MergeAllStocksData import SetGvkeyInStocksPriceRecoomendationsInfos, \
-    MergeStocksWithPriceRecommendations
-from bBlackFireCapitalData.StocksMarketData.StocksPriceData.GetStocksPriceDataFromWRDS import GetStocksPriceData, \
-    ConvertStocksPriceToUSD
-from bBlackFireCapitalData.StocksMarketData.StocksPriceRecommendationData.GetStocksInfosRecommendations import \
-    SetStocksInfosRecommendationsInDB
-from bBlackFireCapitalData.StocksMarketData.StocksPriceRecommendationData.GetStocksPriceRecommendations import \
-    GetStocksPriceRecommendations, ConvertPriceTagetToUSD, PatchStocksPriceRecommendations
+# from bBlackFireCapitalData.CountriesEconomicsData.CountriesExchangeRatesData.GetExchangeRatesData import \
+#     SetExchangeRatesCurrencyInDB
+# from bBlackFireCapitalData.StocksMarketData.StocksPriceData.GetStocksInfosDataFromWRDS import SetStocksInfosDataInDB, \
+#     GetStocksInfosDataDict
+# from bBlackFireCapitalData.CountriesEconomicsData.CountriesEconomicsZoneData.GetCountriesEconomicsZoneData import \
+#     SetCountriesEconomicsZonesInDB, SetCountriesEconomicsZonesForStocksInDB
+# from bBlackFireCapitalData.MergeStocksData.MergeAllStocksData import SetGvkeyInStocksPriceRecoomendationsInfos, \
+#     MergeStocksWithPriceRecommendations
+# from bBlackFireCapitalData.StocksMarketData.StocksPriceData.GetStocksPriceDataFromWRDS import GetStocksPriceData
+# from bBlackFireCapitalData.StocksMarketData.StocksPriceRecommendationData.GetStocksInfosRecommendations import \
+#     SetStocksInfosRecommendationsInDB
+# from bBlackFireCapitalData.StocksMarketData.StocksPriceRecommendationData.GetStocksPriceRecommendations import \
+#     GetStocksPriceRecommendations
 from zBlackFireCapitalImportantFunctions.ConnectionString import TestConnectionString, ProdConnectionString
-from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import GenerateMonthlyTab, principal_processor, \
-    type_consensus, type_price_target, SetBackupOfDataBase, RestoreBackupOfdataBase, \
-    CurrenciesExchangeRatesDBName, StocksMarketDataInfosDBName
-from aBlackFireCapitalClass.ClassPriceRecommendationData.ClassPriceRecommendationDataInfos import \
-    PriceTargetAndconsensusInfosData
+# from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import GenerateMonthlyTab, principal_processor, \
+#     type_consensus, type_price_target, SetBackupOfDataBase, RestoreBackupOfdataBase, \
+#     CurrenciesExchangeRatesDBName, StocksMarketDataInfosDBName
+# from aBlackFireCapitalClass.ClassPriceRecommendationData.ClassPriceRecommendationDataInfos import \
+#     PriceTargetAndconsensusInfosData
 
 
 class NoDaemonProcess(multiprocessing.Process):
@@ -86,6 +86,23 @@ MergeStocksWithPriceRecommendationsParams = collections.namedtuple('MergeStocksW
 if __name__ == '__main__':
 
     connectionstring = TestConnectionString
+    ClientDB = motor.motor_tornado.MotorClient(ProdConnectionString)
+
+    tab = tornado.ioloop.IOLoop.current().run_sync(StocksMarketDataInfos(ClientDB, {}, None).GetDataFromDB)
+    result = []
+    ClientDB.close()
+
+    for value in tab:
+        gvkey = value['_id']
+        eco = value['eco zone']
+        naics = value['naics']
+
+        ident = value['stock identification']
+        for v in ident:
+            result.append([gvkey, eco, naics, v['isin'], v['ibtic'], v['cusip_8'], v['exhg']])
+            result.append([gvkey, eco, naics, v['cusip'], v['ibtic'], v['cusip_8'], v['exhg']])
+
+    np.save('StocksPricesInfos', result)
 
     """This function set all the data inside the platforms"""
 
@@ -176,11 +193,11 @@ if __name__ == '__main__':
     print("7. Set Price Target and Consensus Data")
 
 
-    db = wrds.Connection()
-    count = db.get_row_count(library="ibes",
-                             table="ptgdet")
-    db.close()
-    print(count)
+    # db = wrds.Connection()
+    # count = db.get_row_count(library="ibes",
+    #                          table="ptgdet")
+    # db.close()
+    # print(count)
     # observ = 1000000
     # iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
     # pt = ()
@@ -197,11 +214,11 @@ if __name__ == '__main__':
     # pool.join()
     # print(result)
 
-    db = wrds.Connection()
-    count = db.get_row_count(library="ibes",
-                             table="recddet")
-    db.close()
-    print(count)
+    # db = wrds.Connection()
+    # count = db.get_row_count(library="ibes",
+    #                          table="recddet")
+    # db.close()
+    # print(count)
     # observ = 1000000
     # iter = int(count / observ) if count % observ == 0 else int(count / observ) + 1
     # pt = ()
@@ -217,6 +234,8 @@ if __name__ == '__main__':
     # pool.close()
     # pool.join()
     # print(result)
+
+
 
 
 "7. Set all Price target to USD"

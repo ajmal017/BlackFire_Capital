@@ -2,25 +2,28 @@ import pymongo
 
 
 class SectorsMarketDataInfos:
+    """This class is used to add all the NAICS informations to the DB"""
 
     def __init__(self, database, *data):
 
-        self.database = database['sector']
+        self.database = database['sector']['naics']
         self.data = data
 
-    def SetDataInDB(self):
-        print(self.data[0])
-        try:
-            self.database['infos'].insert_one(self.data[0])
-        except pymongo.errors.DuplicateKeyError:
-            self.database['infos'].update({'_id': self.data[0]['_id']}, {'$set': self.data[0]})
+    async def SetDataInDB(self):
 
-    def GetDataFromDB(self):
+        """"{'_id (NAICS)', 'title', 'description','level'}"""
+
+        try:
+            await self.database.bulk_write(self.data[0])
+        except pymongo.errors.BulkWriteError as bwe:
+            print(bwe.details)
+
+    async def GetDataFromDB(self):
 
         tab_of_result = []
         query = self.data[0]
         to_display = self.data[1]
-        for value in self.database['infos'].find(query, to_display):
+        async for value in self.database.find(query, to_display):
             tab_of_result.append(value)
 
         return tab_of_result

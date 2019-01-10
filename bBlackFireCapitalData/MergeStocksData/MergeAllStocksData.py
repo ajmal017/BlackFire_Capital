@@ -1,19 +1,77 @@
+import motor
+import tornado
 from aBlackFireCapitalClass.ClassPriceRecommendationData.ClassPriceRecommendationDataInfos import \
     PriceTargetAndconsensusInfosData
 from aBlackFireCapitalClass.ClassPriceRecommendationData.ClassPriceRecommendationDataValues import \
     PriceTargetAndconsensusValuesData
 from aBlackFireCapitalClass.ClassStocksMarketData.ClassStocksMarketDataInfos import StocksMarketDataInfos
 from aBlackFireCapitalClass.ClassStocksMarketData.ClassStocksMarketDataPrice import StocksMarketDataPrice
+from zBlackFireCapitalImportantFunctions.ConnectionString import ProdConnectionString
 from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import  GetMeanValueOfPriceRecommendationAgregation
 from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import type_consensus, type_price_target, \
      GenerateMonthlyTab
 import numpy as np
 import pandas as pd
+from pymongo import UpdateMany
+from scipy import  stats
 
 def makeKey(gvkey, cusip, ticker, maskcd, date):
 
     return gvkey + "_" + cusip + "_" + ticker+ "_" + maskcd + "_" + date
 
+def getPriceTargetVar(group):
+
+    group = group[((group['price_to_USD']/ group['price_to_USD'].median()).abs() < 2) &
+                ((group['price_to_USD']/ group['price_to_USD'].median()).abs() > 0.5)]
+
+    group = group[group['variation'].abs() < 2]
+
+    result = [str('{0:.4f}'.format(group['price_to_USD'].mean())),
+              str(group['price_to_USD'].count()), str('{0:.4f}'.format(group['variation'].mean())),
+              str(group['variation'].count())]
+    return ' '.join(result)
+
+def meanVar(group):
+    # print(group)
+    try:
+        value = sum(group['PtVarcount'] * group['PtVarmean'])/sum(group['PtVarcount'])
+    except ZeroDivisionError:
+        value = None
+    except TypeError:
+        value = None
+
+    return value
+
+def BulkPriceTarget(isin, gvkey, pt_mean, pt_count, ptvarmean, ptvarcount, var_mean, var_count):
+
+    return UpdateMany({"isin_or_cusip": isin, "gvkey": gvkey},
+                       {"$set":
+                           {type_price_target:
+                                {'price':str('{0:.4f}'.format(pt_mean)),
+                                 "num_price": int(pt_count),
+                                 "pmean_var": str(ptvarmean),
+                                 "pnum_var": int(ptvarcount),
+                                 "mean_var": str(var_mean),
+                                 "num_var": int(var_count),
+                                 }
+                            }
+                        }
+    )
+
+def getConsensusVar(group):
+
+    # print(group)
+    if group['variation'].count() == 0:
+        var = None
+    else:
+        var = '{0:.4f}'.format(group['variation'].mean())
+
+    return UpdateMany({"gvkey":group.name},
+                      {"$set":
+                           {type_consensus:
+                                {'mean_recom':str('{0:.4f}'.format(group['ireccd'].mean())), "num_recom": int(group['ireccd'].count()),
+                                  "mean_var": str(var), "num_var": int(group['variation'].count())}}}
+    )
 
 def SetdataToDB():
 
@@ -23,16 +81,25 @@ def SetdataToDB():
     tabPT = pd.DataFrame(tabPT, columns= entete)
     tabPT = tabPT[['ticker', 'cusip', 'emaskcd', 'horizon', 'value', 'estcur', 'anndats', 'amaskcd', 'exrat',
               'gvkey', 'variation', 'date']]
+    tabPT = tabPT.set_index('date')
 
-    tabCS = np.load(type_consensus + "_toSaveInDB.npy")
-    entete = ['ticker', 'cusip','emaskcd', 'ireccd', 'anndats', 'amaskcd',
-                   'gvkey', 'variation', 'data', 'date']
-    tabCS = pd.DataFrame(tabCS, columns= entete)
-    tabCS = tabCS[['ticker', 'cusip','emaskcd', 'ireccd', 'anndats', 'amaskcd',
-                   'gvkey', 'variation', 'date']]
+    tabSI = np.load("/home/pougomg/Bureau/BlackFire Capital/zBlackFireCapitalImportantFunctions/StocksPricesInfos.npy")
+    tabSI = pd.DataFrame(tabSI, columns= ['gvkey', 'eco', 'naics', 'isin', 'ticker', 'cusip', 'exhg'])
+    tabSI = tabSI[['gvkey', 'isin', 'ticker', 'cusip']]
+    tabSI = tabSI[tabSI['isin'] != None]
+    tabSI = tabSI.dropna(subset=['isin'])
 
 
-    tabDate = GenerateMonthlyTab('1999-02', '1999-02')
+    # tabCS = np.load(type_consensus + "_toSaveInDB.npy")
+    # entete = ['ticker', 'cusip','emaskcd', 'ireccd', 'anndats', 'amaskcd',
+    #                'gvkey', 'variation', 'data', 'date']
+    # tabCS = pd.DataFrame(tabCS, columns= entete)
+    # tabCS = tabCS[['ticker', 'cusip','emaskcd', 'ireccd', 'anndats', 'amaskcd',
+    #                'gvkey', 'variation', 'date']]
+    # tabCS = tabCS.set_index('date')
+
+
+    tabDate = GenerateMonthlyTab('1999-02', '2018-04')
     tabInFile = []
 
     for pos in range(len(tabDate)):
@@ -45,25 +112,82 @@ def SetdataToDB():
         if pos_begin_cs < 0:
             pos_begin_cs = 0
 
-        pos_last = pos - 1
-        if pos_last < 0:
-            pos_last = 0
         tabInFile.append([date_end, tabDate[pos_begin_pt], tabDate[pos_begin_cs]])
 
-    for value in tabInFile[1:]:
-
+    ClientDB = motor.motor_tornado.MotorClient(ProdConnectionString)
+    # for value in [tabInFile[-1]]:
+    for value in tabInFile[2:]:
+        print(value)
         tabPTtoWork = tabPT.loc[value[1]: value[0]]
-        tabCStoWork = tabCS.loc[value[2]: value[0]]
-
-        v = np.vectorize(makeKey)
-
         tabPTtoWork = tabPTtoWork.sort_values(["gvkey", "cusip", "amaskcd", "anndats"], ascending=[True,True, False,False])
-        tabPTtoWork = tabPTtoWork.drop_duplicates(subset=["gvkey", "cusip", "amaskcd"], keep="first")
+        tabPTtoWork = tabPTtoWork.drop_duplicates(subset=["gvkey", "cusip", 'ticker', "amaskcd"], keep="first")
 
-        tabCStoWork = tabCStoWork.sort_values(["gvkey", "cusip", "amaskcd", "anndats"], ascending=[True,True, False,False])
-        tabCStoWork = tabCStoWork.drop_duplicates(subset=["gvkey", "cusip", "amaskcd"], keep="first")
+        # tabPTtoWork = tabPTtoWork[tabPTtoWork['gvkey'] == '001186']
+        tabPTtoWork[['value', 'exrat', 'variation']] = tabPTtoWork[['value', 'exrat', 'variation']].astype(float)
+        tabPTtoWork["price_to_USD"] = tabPTtoWork.value/tabPTtoWork.exrat
+
+        tabPTtoGroup = tabPTtoWork.groupby(['gvkey', 'cusip', 'ticker'])[['value', 'exrat', 'variation', 'estcur', 'price_to_USD']]\
+            .apply(getPriceTargetVar)
+
+        del tabPTtoWork
+
+        tabPTtoGroup = pd.DataFrame({'result' : tabPTtoGroup}).reset_index()
+        tabPTtoGroup['result'] = tabPTtoGroup['result'].astype(str)
+
+        tabPTtoGroup['pt_mean'], tabPTtoGroup['pt_count'], tabPTtoGroup['PtVarmean'], tabPTtoGroup['PtVarcount'] = tabPTtoGroup['result'].str.split(' ').str
+
+        tabPTtoGroup[['pt_mean', 'pt_count', 'PtVarmean', 'PtVarcount']] = tabPTtoGroup[['pt_mean', 'pt_count', 'PtVarmean', 'PtVarcount']].astype(float)
+
+        t= tabPTtoGroup.groupby('gvkey')['PtVarcount'].sum()
+        tabPTtoGroup['var_count'] = tabPTtoGroup['gvkey'].map(t)
+
+        t = tabPTtoGroup.groupby('gvkey')[['PtVarcount', 'PtVarmean']].apply(meanVar)
+        tabPTtoGroup['var_mean'] = tabPTtoGroup['gvkey'].map(t)
+        print(tabPTtoGroup.shape)
 
 
+        CusipFilterTab = tabSI[tabSI['cusip'] != None][['gvkey', 'isin', 'cusip']]
+        CusipFilterTab = CusipFilterTab.dropna(subset=['cusip'])
+        CusipFilterTab= pd.merge(CusipFilterTab, tabPTtoGroup,on=['gvkey', 'cusip'], sort=False)
+
+
+        TickerFilterTab = tabSI[tabSI['ticker'] != None][['gvkey', 'isin', 'ticker']]
+        TickerFilterTab = TickerFilterTab.dropna(subset=['ticker'])
+
+        TickerFilterTab = pd.merge(TickerFilterTab, tabPTtoGroup,on=['gvkey', 'ticker'], sort=False)
+
+        CusipFilterTab = CusipFilterTab.append(TickerFilterTab)
+        CusipFilterTab = CusipFilterTab.drop_duplicates(CusipFilterTab.columns)
+
+        del TickerFilterTab
+        v = np.vectorize(BulkPriceTarget)
+
+        CusipFilterTab['data'] = v(CusipFilterTab['isin'],CusipFilterTab['gvkey'],CusipFilterTab['pt_mean'],
+                                   CusipFilterTab['pt_count'], CusipFilterTab['PtVarmean'], CusipFilterTab['PtVarcount'],
+                                   CusipFilterTab['var_mean'], CusipFilterTab['var_count'])
+
+        # print(CusipFilterTab[['gvkey', 'isin', 'data']])
+
+
+        # tabCStoWork = tabCS.loc[value[2]: value[0]]
+        # tabCStoWork = tabCStoWork.sort_values(["gvkey", "cusip", "amaskcd", "anndats"], ascending=[True,True, False,False])
+        # tabCStoWork = tabCStoWork.drop_duplicates(subset=["gvkey", "cusip", 'ticker', "amaskcd"], keep="first")
+        # tabCStoWork[['variation', 'ireccd']] = tabCStoWork[['variation', 'ireccd']].astype(float)
+        # tabCStoGroup = tabCStoWork[['variation', 'ireccd']].groupby(tabCStoWork['gvkey']).apply(getConsensusVar)
+
+        # for v in list(tabCStoGroup):
+        #     print(v)
+        # break
+
+        loop = tornado.ioloop.IOLoop
+        loop.current().run_sync(StocksMarketDataPrice(ClientDB, value[0], list(CusipFilterTab['data'])).SetStocksPriceInDB)
+
+    ClientDB.close()
+
+
+if __name__ =='__main__':
+
+    SetdataToDB()
 
 def SetGvkeyInStocksPriceRecoomendationsInfos(params):
 

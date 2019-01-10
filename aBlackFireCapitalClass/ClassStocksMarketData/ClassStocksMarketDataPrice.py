@@ -13,7 +13,7 @@ class StocksMarketDataPrice:
     " price data saved in DB. The inputs params (ClientDB, query, data to display)."""
 
     def __init__(self, database, date, *data):
-        self.database = database['stocks']['summary']
+        self.database = database['stocks']['summary'][date]
         self.data = data
 
     def __str__(self):
@@ -26,17 +26,17 @@ class StocksMarketDataPrice:
 
         return description
 
-    @gen.coroutine
-    def SetStocksPriceInDB(self):
+    async def SetStocksPriceInDB(self):
         """
             :param: {'_id','gvkey','date','curr','csho','vol','adj_factor','price_close','price_high',
                     "price_low','return','ret_usd','curr_to_usd','consensus','price_target'}
 
         """
-
-        yield self.database.insert_many(self.data[0])
-        count = yield self.database.count_documents({})
-        print("Final count: %d" % count)
+        await self.database.create_index("gvkey")
+        try:
+            await self.database.bulk_write(self.data[0], ordered=False)
+        except pymongo.errors.BulkWriteError as bwe:
+            print(bwe.details)
 
     @gen.coroutine
     def GetStocksPriceFromDB(self):
@@ -51,7 +51,7 @@ class StocksMarketDataPrice:
 
     async def SetManyStocksPriceInDB(self):
 
-        await asyncio.wait([self.SetStocksPriceInDB(self.database[data[0]], data[1]) for data in self.data[0]])
+        await asyncio.wait([self.SetStocksPriceInDBInside(self.database[data[0]], data[1]) for data in self.data[0]])
 
 
     @gen.coroutine
@@ -66,7 +66,7 @@ class StocksMarketDataPrice:
             print(bwe.details)
 
     @staticmethod
-    async def SetStocksPriceInDB(ClientDB, data):
+    async def SetStocksPriceInDBInside(ClientDB, data):
 
         try:
             await ClientDB.bulk_write(data)
@@ -83,6 +83,21 @@ class StocksMarketDataPrice:
     @gen.coroutine
     def SetIndexCreation(self):
 
-        index = self.data[0]
+        #index = self.data[0]
 
-        yield self.database.create_index(index)
+        yield self.database.create_index([("isin_or_cusip", pymongo.DESCENDING),
+                                  ("date", pymongo.DESCENDING),])
+
+    async def GetMontlyPrice(self):
+
+        """ This function is used to find the price of the ends of month for the stocks in DB
+        :parameter: Motor.collection for the month, pipeline of the data to return
+        [{
+        :return: Table of Monthly Price
+        """""
+        # self.database.adminCommand({'setParameter': 1, 'internalQueryExecMaxBlockingSortBytes':50151432})
+        tab = []
+        async for doc in self.database.aggregate(self.data[0]):
+            tab.append(doc)
+
+        return tab

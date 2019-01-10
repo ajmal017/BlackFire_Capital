@@ -319,5 +319,8 @@ def SetDataToDB(params):
 if __name__ == '__main__':
     params = table(type=type_price_target)
     # AddGvkeyToTable(params)
-    # CalculateRecommendationVar(params)
-    SetDataToDB(params)
+    CalculateRecommendationVar(params)
+    params = table(type=type_consensus)
+    CalculateRecommendationVar(params)
+
+    # SetDataToDB(params)

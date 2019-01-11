@@ -32,7 +32,6 @@ class StocksMarketDataPrice:
                     "price_low','return','ret_usd','curr_to_usd','consensus','price_target'}
 
         """
-        await self.database.create_index("gvkey")
         try:
             await self.database.bulk_write(self.data[0], ordered=False)
         except pymongo.errors.BulkWriteError as bwe:

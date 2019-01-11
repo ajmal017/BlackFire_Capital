@@ -10,11 +10,6 @@ class SectorsMarketDataPrice:
         self.data = data
 
     async def SetSectorsPriceInDB(self):
-        """
-            :param: {'_id','gvkey','date','curr','csho','vol','adj_factor','price_close','price_high',
-                    "price_low','return','ret_usd','curr_to_usd','consensus','price_target'}
-
-        """
 
         try:
             await self.database.bulk_write(self.data[0], ordered=False)

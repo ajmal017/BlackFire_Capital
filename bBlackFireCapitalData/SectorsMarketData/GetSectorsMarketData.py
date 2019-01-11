@@ -309,9 +309,50 @@ def SetSectorPriceToDB(params):
 
     ClientDB.close()
 
+def getSectorsPrice(params):
+
+
+    # ClientDB = motor.motor_tornado.MotorClient(ProdConnectionString)
+    # # loop = tornado.ioloop.IOLoop
+    # # loop.current().run_sync(SectorsMarketDataPrice(ClientDB, None).create_index)
+    #
+    # loop = tornado.ioloop.IOLoop
+    # tabSectorInfos = loop.current().run_sync(SectorsMarketDataPrice(ClientDB, {}, None).GetStocksPriceFromDB)
+    #
+    # tab_to_save = []
+    #
+    # for value in tabSectorInfos:
+    #
+    #
+    #     eco = value['eco zone']
+    #     naics = value['naics']
+    #     date = value['date']
+    #
+    #     csho = value['csho']
+    #     vol = value['vol']
+    #     pc = value['price_close']
+    #     ph = value['price_high']
+    #     pl = value['price_low']
+    #
+    #     pt = value['price_target']
+    #     cs = value['consensus']
+    #
+    #     t = [date, eco, naics, csho, vol, pc, ph, pl, pt['num_var'], pt['mean_var'], pt['pnum_var'], pt['pmean_var'],
+    #          cs['num_recom'], cs['mean_recom'], cs['num_var'], cs['mean_var']]
+    #
+    #     tab_to_save.append(t)
+    #
+    # np.save('tabSectorPrice.npy', tab_to_save)
+
+    # ClientDB.close()
+    tab = np.load('tabSectorPrice.npy')
+    print(tab.shape)
+
+
 
 if __name__ == "__main__":
     # GetListofEcoZoneAndNaics(ProdConnectionString)
     # AddStocksPerNaicsAndEcoZone()
     # filterStocksPerTradeStocksExchange()
-    SetSectorPriceToDB(TestConnectionString)
+    # SetSectorPriceToDB(TestConnectionString)
+    getSectorsPrice('')

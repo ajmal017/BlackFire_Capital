@@ -1,4 +1,6 @@
-from bBlackFireCapitalData.SectorsMarketData.GetSectorsMarketInfos import getsectorinlevel
+# from bBlackFireCapitalData.SectorsMarketData.GetSectorsMarketInfos import getsectorinlevel
+from bBlackFireCapitalData.SectorsMarketData.GetSectorsMarketInfos import getSectorForLevel
+from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import profile
 
 """ This script will build some strategies base ont the sentiment in the market. As input, we """ + \
     """have the StocksPriceData price, price target and consensus group by NAICS. The following strategy """+\
@@ -26,12 +28,29 @@ __INDICE_FOR_VAR__ = ['eco zone', 'naics', 'pc']
 __ACTUAL__ = ''
 __PREV__ = '_prev'
 
+
+def z_score(group):
+
+    return (group[-1] - group.mean())/group.std()
+
+
+def reversal_signal(val):
+
+    if val == 10:
+        return -1
+    elif val == 1:
+        return 1
+    else:
+        return 0
+
+
 def evaluate_cross_validation(clf, x, y, k):
 
     cv = KFold(len(y), k, shuffle=True, random_state=0)
     scores = cross_val_score(clf, x, y, cv=cv)
     print(scores)
     print('Mean score: {0:.3f) (+/- {1:.3f})'.format(np.mean(scores), sem(scores)))
+
 
 def train_and_evaluate(clf, x_tr, x_te, y_tr, y_te):
 
@@ -43,33 +62,32 @@ def train_and_evaluate(clf, x_tr, x_te, y_tr, y_te):
     print("Classification report")
     print(metrics.classification_report(y_te, y_pr))
 
-def GroupBySectorWLD(group):
-    date = group.name
-    tabGroup = group[['ptmvar', 'pptmvar', 'csmrec', 'csmvar', 'ret']].quantile(np.array([0, 0.1, 0.3, 0.7,0.9, 1]), numeric_only=False)
+
+def return_by_quantile(group):
+
+    tab = [['EW'],['MW']]
+    for i in range(1, 11):
+        t = group[group['Rankingptmvar'] == i]
+        t['mc'] = t['csho'] * t['ret']
+        tab[0].append(t["ret"].mean() + 1)
+        tab[1].append((t['csho'] * t['ret']).sum()/t['csho'].sum() + 1)
+    tab = pd.DataFrame(tab, columns=['Type'] + ['Q'+str(i) for i in range(1, 11)])
+    tab['l/s'] = 1 + (1.3*(tab['Q9'] - 1) - 0.3*(tab['Q2'] - 1))
+    tab['date'] = group.name
+    return tab
+
+
+def group_in_quantile(group):
+
+    tab_group = group[['ptmvar']].quantile(np.array([0, 0.1, 0.2, 0.3,0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]), numeric_only=False)
     group = group.fillna(np.nan)
+    labels = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
+    group['Rankingptmvar'] = pd.cut(group['ptmvar'],  tab_group['ptmvar'], labels=labels).values.add_categories('0').fillna('0')
 
-    labels = ['1', '2', '3', '4', '5']
-    group['bkptmvar'] = pd.cut(group['ptmvar'], tabGroup['ptmvar'], labels=labels).values.add_categories('0').fillna('0')
-    group['bkpptmvar'] = pd.cut(group['pptmvar'], tabGroup['pptmvar'], labels=labels).values.add_categories('0').fillna('0')
-    group['bkcsmrec'] = pd.cut(group['csmrec'], tabGroup['csmrec'], labels=labels).values.add_categories('0').fillna('0')
-    group['bkcsmvar'] = pd.cut(group['csmvar'], tabGroup['csmvar'], labels=labels).values.add_categories('0').fillna('0')
-    group['bkret'] = pd.cut(group['ret'], tabGroup['ret'], labels=labels).values.add_categories('0').fillna('0')
-    group['date'] = date
-    group['wret'] = group['csho'] * group['ret']
-
-    to_sell = group[(group['bkcsmvar'] == '1') & (group['bkptmvar'] == '5')]
-    to_buy = group[(group['bkcsmvar'] == '5')& (group['bkptmvar'] == '1')]
-
-    to_buy = (to_buy['csho'] * to_buy['ret']).sum()/to_buy['csho'].sum()
-    to_sell = (to_sell['csho'] * to_sell['ret']).sum() / to_sell['csho'].sum()
-
-    # print(to_buy, to_sell)
-    return 1.3 * to_sell - 0.3 * to_buy + 1
-
-    # return group[['date', 'naics', 'bkptmvar', 'bkpptmvar', 'bkcsmrec', 'bkcsmvar', 'bkret']]
+    return group[['date', 'naics', 'Rankingptmvar']]
 
 
-def GetSectorReturn(eco, naics, pc, ecop, naicsp, pcp):
+def get_sector_return(eco, naics, pc, ecop, naicsp, pcp):
 
     if eco != ecop:
         return None
@@ -83,7 +101,7 @@ def GetSectorReturn(eco, naics, pc, ecop, naicsp, pcp):
         return None
 
 
-def GetReturnnextmonth(eco, naics, ecop, naicsp, ret):
+def get_next_monthly_return(eco, naics, ecop, naicsp, ret):
 
     if eco != ecop:
         return None
@@ -93,7 +111,7 @@ def GetReturnnextmonth(eco, naics, ecop, naicsp, ret):
     return ret
 
 
-def getSectorsPrice(params):
+def get_sectors_price(params):
 
     ClientDB = motor.motor_tornado.MotorClient(params.ConnectionString)
     # loop = tornado.ioloop.IOLoop
@@ -130,7 +148,7 @@ def getSectorsPrice(params):
     ClientDB.close()
 
 
-def PlotData():
+def plot_data():
 
     tabSectorPrice = np.load('tabSectorPrice.npy')
     tabSectorPrice = pd.DataFrame(tabSectorPrice,columns=__ENTETE__)
@@ -182,49 +200,113 @@ def PlotData():
     np.save('DataModelSectorPrice', tabSectorPrice)
 
 
-def StrategybySectorWLD():
+def strategy_wld():
 
-    tabData = np.load('DataModelSectorPrice.npy')
+    tab_data = np.load('DataModelSectorPrice.npy')
     __ENTETE__.append('ret')
-    tabData = pd.DataFrame(tabData, columns=__ENTETE__)
+    tab_data = pd.DataFrame(tab_data, columns=__ENTETE__)
+    tab_data = tab_data.reset_index(drop=True)
+    tab_data = tab_data[(tab_data['naics'] == 'ALL')][['date', 'eco zone', 'ptmvar', 'csmvar', 'pc', 'ret', 'csho']].reset_index(drop=True)
+
+    tab_data = tab_data[tab_data['eco zone'] != "WLD"]
+
+    tab_data = tab_data.sort_values(["eco zone", "date"], ascending=[True, True]).reset_index(drop=True)
+
     print(__ENTETE__)
+    tab_data['date'] = pd.to_datetime(tab_data['date'])
+    print(tab_data.info())
 
-    t = tabData[(tabData['eco zone'] == 'CAD') & (tabData['naics'] == '211')].set_index('date')[['ret', 'pc', 'ptmvar', 'csmvar']]
-    print(t['pc'].iloc[0])
-    t['price close'] = t['pc']/t['pc'].iloc[0]
-    t['price target var'] = t['ptmvar']*3
-    t['consensus var'] = -t['csmvar'] / t['csmvar'].iloc[0]
+    #Calcul du Zscore 12 mo pour chaque naics
+    result = tab_data.set_index('date')
+    result = result[['ptmvar', 'csmvar']].groupby(result['eco zone']).rolling(12, min_periods=9).apply(z_score)
+    result = pd.DataFrame(result, columns=['ptmvar']).reset_index()
+    result = result[result['date'] > datetime(2000,12,1)]
 
-    t[['price close', 'price target var']].plot()
-    print(t[['pc', 'ptmvar', 'csmvar']])
-    print(t[['ret', 'ptmvar', 'csmvar']].corr(method='kendall'))
-    # tabData = tabData[['date', 'eco zone', 'naics', 'csho', 'ptmvar', 'pptmvar', 'csmrec', 'csmvar', 'ret']]
+    #Ranking of Naics Zscore by month
+    result = result[['date', 'eco zone', 'ptmvar']].groupby(result['date']).apply(group_in_quantile)
+    tab_data = pd.merge(tab_data, result[['eco zone', 'date', 'Rankingptmvar']], on=['eco zone', 'date'])
+    tab_data['Rankingptmvar'] = tab_data['Rankingptmvar'].astype(int)
+    print(tab_data.head())
+    v = np.vectorize(reversal_signal)
+    tab_data['test'] = v(tab_data['Rankingptmvar'])
+    # plt.figure(1)
+    # plt.subplot(2,1,1)
+    # tab_data[tab_data['naics'] == '517'].set_index('date')['pc'].plot()
+    # plt.subplot(2,1,2)
+    # tab_data[tab_data['naics'] == '517'].set_index('date')['test'].plot()
+
+
+    #Calcul return by Quantile
+    result = tab_data[['csho', 'ret', 'Rankingptmvar', 'date']].groupby(tab_data['date']).apply(return_by_quantile).set_index('date')
+    result.iloc[[0,1], 1:12] = 1
+    print(result.head())
+    result = result[result['Type'] == 'EW']
+    result = result.groupby(result['Type']).cumprod()
+    print(result)
+
+@profile
+def strategy_by_sector_for_eco_zone(eco_zone):
+
+    tab_data = np.load('DataModelSectorPrice.npy')
+    __ENTETE__.append('ret')
+    tab_data = pd.DataFrame(tab_data, columns=__ENTETE__)
+    tab_data = tab_data.reset_index(drop=True)
+    tab_data = tab_data[(tab_data['eco zone'] == eco_zone)][['date', 'naics', 'ptmvar', 'csmvar', 'pc', 'ret', 'csho']].reset_index(drop=True)
+
+    tab_data = tab_data[tab_data['naics'].isin(getSectorForLevel(2))]
+
+    tab_data = tab_data.sort_values(["naics", "date"], ascending=[True, True]).reset_index(drop=True)
+
+    print(__ENTETE__)
+    tab_data['date'] = pd.to_datetime(tab_data['date'])
+    print(tab_data.info())
+
+    #Calcul du Zscore 12 mo pour chaque naics
+    result = tab_data.set_index('date')
+    result = result[['ptmvar', 'csmvar']].groupby(result['naics']).rolling(12, min_periods=9).apply(z_score)
+    result = pd.DataFrame(result, columns=['ptmvar']).reset_index()
+    result = result[result['date'] > datetime(2000,12,1)]
+
+    #Ranking of Naics Zscore by month
+    result = result[['date', 'naics', 'ptmvar']].groupby(result['date']).apply(group_in_quantile)
+    tab_data = pd.merge(tab_data, result[['naics', 'date', 'Rankingptmvar']], on=['naics', 'date'])
+    tab_data['Rankingptmvar'] = tab_data['Rankingptmvar'].astype(int)
+    print(tab_data.head())
+    v = np.vectorize(reversal_signal)
+    tab_data['test'] = v(tab_data['Rankingptmvar'])
+    plt.figure(1)
+    plt.subplot(2,1,1)
+    tab_data[tab_data['naics'] == '517'].set_index('date')['pc'].plot()
+    plt.subplot(2,1,2)
+    tab_data[tab_data['naics'] == '517'].set_index('date')['test'].plot()
+
+
+    #Calcul return by Quantile
+    result = tab_data[['csho', 'ret', 'Rankingptmvar', 'date']].groupby(tab_data['date']).apply(return_by_quantile).set_index('date')
+    result.iloc[[0,1], 1:12] = 1
+    print(result.head())
+    result = result[result['Type'] == 'EW']
+    result = result.groupby(result['Type']).cumprod()
+    print(result)
+
+    # result['Q1'].plot()
+    # result['Q2'].plot()
+    # result['Q3'].plot()
+    # result['Q10'].plot()
+
+    # result['l/s'].plot()
+    # result['Q5'].plot()
+    # tab_data = tab_data.set_index('date')
+    # (tab_data[(tab_data['naics'] == '721')]['strategy']*18).plot(ax=plt.gca())
     #
-    # tabData = tabData[tabData['naics'].isin(getsectorinlevel(2))]
-    #
-    # tabData = tabData[(tabData['eco zone'] == 'USD') & (tabData['naics'] != 'ALL')]
-    # print(tabData.shape)
-    # tabData['ret'] = tabData['ret'].dropna()
-    # tabData['ptmvar'] = tabData['ptmvar'].dropna()
-    # print(tabData.shape)
-    # tabData = tabData.groupby(['date']).apply(GroupBySectorWLD)
-    # print(tabData.index)
-    # tabData = pd.DataFrame(np.array(tabData), columns=['return'], index=tabData.index)
-    # tabData['ret_cum'] = tabData['return'].cumprod()
-    # print(tabData)
-
-    # tabData[['ret_cum']].plot()
-
+    # plt.subplot(2,1,2)
+    # tab_data[(tab_data['naics'] == '721')]['sptmvar'].plot(ax=plt.gca())
+    # #
     plt.show()
-
-    # x_tr, x_te, y_tr, y_te = train_test_split(tabData[['ptmvar']], tabData['ret'], test_size=0.25, random_state=0)
-    # svc = tree.DecisionTreeClassifier(criterion='entropy')
-    # evaluate_cross_validation(svc, x_tr, y_tr, 5)
-    # print(x_tr,y_tr)
-    # train_and_evaluate(svc, x_tr, x_te, y_tr, y_te)
 
 
 if __name__ == "__main__":
 
     # PlotData()
-    StrategybySectorWLD()
+    strategy_by_sector_for_eco_zone("WLD")
+    # strategy_wld()

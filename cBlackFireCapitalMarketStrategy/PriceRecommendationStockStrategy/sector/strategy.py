@@ -12,7 +12,7 @@ import tornado
 import numpy as np
 import pandas as pd
 from datetime import datetime
-from sklearn import tree, metrics, svm
+from sklearn import tree, metrics, svm, ensemble
 from sklearn.cross_validation import cross_val_score,  KFold, train_test_split
 from scipy.stats import sem
 
@@ -49,7 +49,7 @@ def evaluate_cross_validation(clf, x, y, k):
     cv = KFold(len(y), k, shuffle=True, random_state=0)
     scores = cross_val_score(clf, x, y, cv=cv)
     print(scores)
-    print('Mean score: {0:.3f) (+/- {1:.3f})'.format(np.mean(scores), sem(scores)))
+    print('Mean score: {0:.3f}) (+/- {1:.3f})'.format(np.mean(scores), sem(scores)))
 
 
 def train_and_evaluate(clf, x_tr, x_te, y_tr, y_te):
@@ -63,11 +63,26 @@ def train_and_evaluate(clf, x_tr, x_te, y_tr, y_te):
     print(metrics.classification_report(y_te, y_pr))
 
 
-def return_by_quantile(group):
+def return_in_quantile(group):
+
+    Labels = ['1', '2', '3']
+    tab_group = group[['ret']].quantile(np.array([0, 0.2, 0.8, 1]), numeric_only=False)
+    group = group.fillna(np.nan)
+
+    tab_group['labels'] = ['0'] + Labels
+    x = tab_group[['ret', 'labels']].drop_duplicates(['ret'])
+    labels = list(x['labels'])
+    labels.remove('0')
+    group['ranking_return'] = pd.cut(group['ret'],  x['ret'], labels=labels).values.add_categories('0').fillna('0')
+
+    return group[['date', 'naics', 'ranking_return']]
+
+
+def calculate_return_by_quantile(group):
 
     tab = [['EW'],['MW']]
     for i in range(1, 11):
-        t = group[group['Rankingptmvar'] == i]
+        t = group[group.iloc[:, 3] == i]
         t['mc'] = t['csho'] * t['ret']
         tab[0].append(t["ret"].mean() + 1)
         tab[1].append((t['csho'] * t['ret']).sum()/t['csho'].sum() + 1)
@@ -79,12 +94,23 @@ def return_by_quantile(group):
 
 def group_in_quantile(group):
 
-    tab_group = group[['ptmvar']].quantile(np.array([0, 0.1, 0.2, 0.3,0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]), numeric_only=False)
+    Labels = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
+    tab_group = group[['ptmvar', 'csmvar']].quantile(np.array([0, 0.1, 0.2, 0.3,0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]), numeric_only=False)
     group = group.fillna(np.nan)
-    labels = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
-    group['Rankingptmvar'] = pd.cut(group['ptmvar'],  tab_group['ptmvar'], labels=labels).values.add_categories('0').fillna('0')
 
-    return group[['date', 'naics', 'Rankingptmvar']]
+    tab_group['labels'] = ['0'] + Labels
+    x = tab_group[['csmvar', 'labels']].drop_duplicates(['csmvar'])
+    labels = list(x['labels'])
+    labels.remove('0')
+    group['ranking_csmvar'] = pd.cut(group['csmvar'],  x['csmvar'], labels=labels).values.add_categories('0').fillna('0')
+
+    tab_group['labels'] = ['0'] + Labels
+    x = tab_group[['ptmvar', 'labels']].drop_duplicates(['ptmvar'])
+    labels = list(x['labels'])
+    labels.remove('0')
+    group['ranking_ptmvar'] = pd.cut(group['ptmvar'],  x['ptmvar'], labels=labels).values.add_categories('0').fillna('0')
+
+    return group[['date', 'naics', 'ranking_ptmvar', 'ranking_csmvar']]
 
 
 def get_sector_return(eco, naics, pc, ecop, naicsp, pcp):
@@ -244,7 +270,7 @@ def strategy_wld():
     result = result.groupby(result['Type']).cumprod()
     print(result)
 
-@profile
+# @profile
 def strategy_by_sector_for_eco_zone(eco_zone):
 
     tab_data = np.load('DataModelSectorPrice.npy')
@@ -253,45 +279,61 @@ def strategy_by_sector_for_eco_zone(eco_zone):
     tab_data = tab_data.reset_index(drop=True)
     tab_data = tab_data[(tab_data['eco zone'] == eco_zone)][['date', 'naics', 'ptmvar', 'csmvar', 'pc', 'ret', 'csho']].reset_index(drop=True)
 
+    #Filter all NAICS of level 2
     tab_data = tab_data[tab_data['naics'].isin(getSectorForLevel(2))]
-
     tab_data = tab_data.sort_values(["naics", "date"], ascending=[True, True]).reset_index(drop=True)
-
-    print(__ENTETE__)
     tab_data['date'] = pd.to_datetime(tab_data['date'])
-    print(tab_data.info())
+    print(__ENTETE__)
+
+    #Ranking Stocks Returns
+    result = tab_data.groupby(tab_data['date']).apply(return_in_quantile)
+    tab_data = pd.merge(tab_data, result, on=['naics', 'date'])
+
+    # Ranking of Feature by month
+    result = tab_data[['date', 'naics', 'ptmvar', 'csmvar']].groupby(tab_data['date']).apply(group_in_quantile)
+    tab_data = pd.merge(tab_data, result[['naics', 'date', 'ranking_ptmvar', 'ranking_csmvar']], on=['naics', 'date'])
+    tab_data[['ranking_ptmvar', 'ranking_csmvar']] = tab_data[['ranking_ptmvar', 'ranking_csmvar']].astype(int)
 
     #Calcul du Zscore 12 mo pour chaque naics
     result = tab_data.set_index('date')
     result = result[['ptmvar', 'csmvar']].groupby(result['naics']).rolling(12, min_periods=9).apply(z_score)
-    result = pd.DataFrame(result, columns=['ptmvar']).reset_index()
+    result = result.reset_index()
     result = result[result['date'] > datetime(2000,12,1)]
 
     #Ranking of Naics Zscore by month
-    result = result[['date', 'naics', 'ptmvar']].groupby(result['date']).apply(group_in_quantile)
-    tab_data = pd.merge(tab_data, result[['naics', 'date', 'Rankingptmvar']], on=['naics', 'date'])
-    tab_data['Rankingptmvar'] = tab_data['Rankingptmvar'].astype(int)
-    print(tab_data.head())
-    v = np.vectorize(reversal_signal)
-    tab_data['test'] = v(tab_data['Rankingptmvar'])
-    plt.figure(1)
-    plt.subplot(2,1,1)
-    tab_data[tab_data['naics'] == '517'].set_index('date')['pc'].plot()
-    plt.subplot(2,1,2)
-    tab_data[tab_data['naics'] == '517'].set_index('date')['test'].plot()
+    result = result[['date', 'naics', 'ptmvar', 'csmvar']].groupby(result['date']).apply(group_in_quantile)
+    result.columns = ['date', 'naics', 'historical_ranking_ptmvar', 'historical_ranking_csmvar']
+    tab_data = pd.merge(tab_data, result, on=['naics', 'date'])
+    tab_data[['historical_ranking_ptmvar', 'historical_ranking_csmvar']] = tab_data[['historical_ranking_ptmvar', 'historical_ranking_csmvar']].astype(int)
 
 
-    #Calcul return by Quantile
-    result = tab_data[['csho', 'ret', 'Rankingptmvar', 'date']].groupby(tab_data['date']).apply(return_by_quantile).set_index('date')
+    x_tr, x_te, y_tr, y_te = train_test_split(tab_data[['historical_ranking_ptmvar', 'historical_ranking_csmvar',
+                                                        'ranking_csmvar']],
+                                              tab_data['ranking_return'],
+                                              test_size=0.25,
+                                              random_state=33)
+    clf = ensemble.RandomForestClassifier(n_estimators=10, random_state=33)
+    train_and_evaluate(clf, x_tr, x_te, y_tr, y_te)
+    evaluate_cross_validation(clf, x_tr, y_tr, 5)
+
+    return
+    # Calcul return by Quantile
+    result = tab_data[['date', 'csho', 'ret', 'historical_ranking_ptmvar']].groupby(tab_data['date']).apply(calculate_return_by_quantile).set_index('date')
     result.iloc[[0,1], 1:12] = 1
-    print(result.head())
     result = result[result['Type'] == 'EW']
     result = result.groupby(result['Type']).cumprod()
-    print(result)
+    print(result.tail())
+    result['Q9'].plot()
+
+    result = tab_data[['date', 'csho', 'ret', 'historical_ranking_csmvar']].groupby(tab_data['date']).apply(calculate_return_by_quantile).set_index('date')
+    result.iloc[[0,1], 1:12] = 1
+    result = result[result['Type'] == 'EW']
+    result = result.groupby(result['Type']).cumprod()
+    print(result.tail())
 
     # result['Q1'].plot()
-    # result['Q2'].plot()
-    # result['Q3'].plot()
+    result['Q2'].plot()
+
     # result['Q10'].plot()
 
     # result['l/s'].plot()
@@ -308,5 +350,5 @@ def strategy_by_sector_for_eco_zone(eco_zone):
 if __name__ == "__main__":
 
     # PlotData()
-    strategy_by_sector_for_eco_zone("WLD")
+    strategy_by_sector_for_eco_zone("USD")
     # strategy_wld()

@@ -1,6 +1,6 @@
 import asyncio
-
 import pymongo
+import pandas as pd
 from tornado import gen
 
 
@@ -87,16 +87,25 @@ class StocksMarketDataPrice:
         yield self.database.create_index([("isin_or_cusip", pymongo.DESCENDING),
                                   ("date", pymongo.DESCENDING),])
 
-    async def GetMontlyPrice(self):
+    async def GetMontlyPrice(self) -> pd.DataFrame:
 
         """ This function is used to find the price of the ends of month for the stocks in DB
         :parameter: Motor.collection for the month, pipeline of the data to return
-        [{
         :return: Table of Monthly Price
         """""
-        # self.database.adminCommand({'setParameter': 1, 'internalQueryExecMaxBlockingSortBytes':50151432})
-        tab = []
-        async for doc in self.database.aggregate(self.data[0]):
-            tab.append(doc)
 
-        return tab
+        chunk_size = 10000
+        records = []
+        frames = []
+        i = 0
+        # return  pd.DataFrame(lambda doc: doc for doc in self.database.aggregate(self.data[0]))
+        async for doc in self.database.aggregate(self.data[0]):
+            records.append(doc)
+            if i % chunk_size == chunk_size - 1:
+                frames.append(pd.DataFrame(records))
+                records = []
+            i+= 1
+
+        if records:
+            frames.append(pd.DataFrame(records))
+        return pd.concat(frames)

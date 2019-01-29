@@ -1,16 +1,14 @@
 import motor
 import tornado
-
-import pymongo
-from csv import reader
+import numba
+from multiprocessing import Pool
 import numpy as np
 import collections
 import pandas as pd
-import re
 from pathlib import Path
 from pymongo import InsertOne
 from datetime import  datetime
-
+import wrds
 
 
 from aBlackFireCapitalClass.ClassEconomcisZonesData.ClassEconomicsZonesDataInfos import EconomicsZonesDataInfos
@@ -25,8 +23,21 @@ set_sector_tuple = collections.namedtuple('set_sector_tuple', [
     'zone_eco',
 ])
 
+monthly_stocks_price = collections.namedtuple('monthly_stocks_price', ['month', 'stocks_by_sector'])
+
 __ENTETE__ = ['eco zone', 'naics', 'csho', 'vol', 'pc', 'ph', 'pl', 'nptvar', 'ptvar', 'npptvar',
               'pptvar', 'nrc', 'rc', 'nrcvar', 'rcvar', 'nstocks']
+@numba.jit
+def split_price_target(args):
+
+    return pd.Series([args['price_target']['price'], args['price_target']['num_price'],
+                      args['price_target']['mean_var'], args['price_target']['num_var'],
+                      args['price_target']['pmean_var'], args['price_target']['pnum_var']])
+@numba.jit
+def split_consensus(args):
+
+    return pd.Series([args['consensus']['mean_recom'], args['consensus']['num_recom'],
+                      args['consensus']['mean_var'], args['consensus']['num_var']])
 
 def SectorGrouping(group):
 
@@ -78,6 +89,13 @@ def SectorGrouping(group):
     tab = [ecozone, naics, csho, vol, pc, ph, pl, nptvar, ptvar, npptvar, pptvar, nrc, rc, nrcvar, rcvar, nstocks]
 
     return pd.DataFrame([tab], columns=__ENTETE__)
+
+
+def correct_stocks(group):
+
+    group.sort_index(inplace=True, ascending=True)
+    group[['csho', 'pc']] = group[['csho', 'pc']].fillna(method='bfill')
+    # return group[['csho', 'pc']]
 
 
 def BulkWriteData(csho, vol, pc, ph, pl, nptvar, ptvar, npptvar, pptvar, rc, nrc, rcvar, nrcvar, eco, naics, date):
@@ -160,11 +178,27 @@ def filterStocksPerTradeStocksExchange():
     print(tabStocksExchange)
     np.save('StocksBySectorWithLiquidExchg',StocksBySector)
 
-@profile
+# @profile
 def SetSectorPriceToDB(params):
 
-    StocksBySector = np.load('StocksBySectorWithLiquidExchg.npy')
-    StocksBySector = pd.DataFrame(StocksBySector, columns=['eco zone', 'naics', 'gvkey', 'isin', 'exchg'])
+    """"
+    Set Sector Price in DB
+
+    Use this function when you need to aggregate the stocks price by Sector and by Economics zones. This function
+    is useful to build some specific sectors indexes.
+    The economics zones are given by the currencies of developped and emerging countries.
+    The sectors are the NAICS sectors for levels 1 and 2.
+
+    Parameters
+    ----------
+    connection_string: url of the connection to the MongoDB.
+
+    Returns
+    -------
+
+
+    """""
+    #Pipeline to query the last price of the month
 
     pipeline = [{'$sort': {"isin_or_cusip": 1, "date": 1}},
                 {
@@ -185,26 +219,49 @@ def SetSectorPriceToDB(params):
 
                     }
                 }]
-    tabofMonth = GenerateMonthlyTab('1990-02', '2017-12')
     ClientDB = motor.motor_tornado.MotorClient(ProdConnectionString)
 
-    for month in tabofMonth:
 
-        print(month)
-        loop = tornado.ioloop.IOLoop
-        loop.current().run_sync(StocksMarketDataPrice(ClientDB, month, {}, None).SetIndexCreation)
-        loop = tornado.ioloop.IOLoop
-        tabStocksPrice = loop.current().run_sync(StocksMarketDataPrice(ClientDB, month, pipeline).GetMontlyPrice)
+    #Get Last Stocks Price of the month from the MongoDB
+    loop = tornado.ioloop.IOLoop
+    tab_of_stocks_price = loop.current().run_sync(StocksMarketDataPrice(ClientDB, params.month, pipeline).GetMontlyPrice)
+    tab_of_stocks_price.rename(columns = {'_id': 'isin', 'price_close': 'pc', 'price_high': 'ph', 'price_low': 'pl',
+                                          'USD_to_curr': 'USDtocurr'},
+                               inplace=True)
+    ClientDB.close()
+
+    #Split Price Target information
+    _filter = tab_of_stocks_price[tab_of_stocks_price['price_target'].notna()]
+    result = _filter.apply(split_price_target, axis = 1)
+    result['isin'] = _filter['isin']
+    result.columns = ['pt', 'npt', 'ptvar', 'nptvar', 'pptvar', 'npptvar', 'isin']
+    tab_of_stocks_price = pd.merge(tab_of_stocks_price, result, on=['isin'], how='left')
+
+    #Split Consensus information
+    _filter = tab_of_stocks_price[tab_of_stocks_price['consensus'].notna()]
+    result = _filter[['consensus']].apply(split_consensus, axis = 1)
+    result['isin'] = _filter['isin']
+    result.columns = ['rc', 'nrc', 'rcvar', 'nrcvar', 'isin']
+    tab_of_stocks_price = pd.merge(tab_of_stocks_price, result, on=['isin'], how='left')
+
+    entete = ['isin', 'gvkey', 'curr', 'csho', 'vol', 'adj_factor', 'pc', 'ph', 'pl', 'USDtocurr','pt', 'npt', 'ptvar',
+              'nptvar', 'pptvar', 'npptvar', 'rc', 'nrc', 'rcvar', 'nrcvar', 'date']
+
+    tab_of_stocks_price = pd.merge(params.stocks_by_sector, tab_of_stocks_price[entete],on=['gvkey', 'isin'], how='inner')
+    print('Periode {0} Completed'.format(params.month))
+    return tab_of_stocks_price
 
 
+    for o in [0]:
         tab_result = []
 
-        for value in tabStocksPrice:
+        for value in tab_of_stocks_price:
 
             tPrice = [value['_id'], value['gvkey'], value['curr'], value['csho'], value['vol'], value['adj_factor'],
                  value['price_close'], value['price_high'], value['price_low'], value['USD_to_curr']]
 
             if value['price_target'] is not None:
+
                 _  = value['price_target']
                 _['price'] = None if _['price'] == "None" else float (_['price'])
                 _['mean_var'] = None if _['mean_var'] == "None" else float (_['mean_var'])
@@ -224,7 +281,7 @@ def SetSectorPriceToDB(params):
 
             tab_result.append(tPrice + tPriceTarget + tConsensus)
 
-        del tabStocksPrice
+        del tab_of_stocks_price
 
 
         tab_result = pd.DataFrame(tab_result, columns=['isin', 'gvkey', 'curr', 'csho', 'vol', 'adj_factor', 'pc', 'ph',
@@ -232,7 +289,7 @@ def SetSectorPriceToDB(params):
                                                        'rc', 'nrc', 'rcvar', 'nrcvar'])
 
 
-        tab_result = pd.merge(StocksBySector, tab_result,on=['gvkey', 'isin'])
+
 
         tab_result[['csho', 'vol', 'adj_factor', 'pc', 'ph','pl', 'USDtocurr','pt', 'npt', 'ptvar', 'nptvar', 'pptvar', 'npptvar',
                                                        'rc', 'nrc', 'rcvar', 'nrcvar']] \
@@ -307,7 +364,43 @@ def SetSectorPriceToDB(params):
         loop = tornado.ioloop.IOLoop
         loop.current().run_sync(SectorsMarketDataPrice(ClientDB, tabtoinsert).SetSectorsPriceInDB)
 
-    ClientDB.close()
+
+def patch_stocks_price(monthly_prices) -> pd.DataFrame:
+
+    """"
+    This function is used to correct all the mistakes in the price and csho of the data. To correct the mistake,
+    we make a rolling of 3 months. if there is a missing value on the month 2, the price is replace by the mean
+    between month 1 and 2 and the csho take the value of the month 1.
+
+    :param
+    monthly_prices: dataFrame containing monthly price of the stocks
+
+    :return
+    Dataframe of Price with correction
+    """""
+    entete = ['eco zone', 'naics', 'gvkey', 'isin', 'exchg', 'curr', 'csho', 'vol', 'adj_factor', 'pc', 'ph', 'pl',
+              'USDtocurr', 'pt', 'npt', 'ptvar', 'nptvar', 'pptvar', 'npptvar', 'rc', 'nrc', 'rcvar', 'nrcvar', 'date']
+    monthly_prices = pd.DataFrame(monthly_prices, columns=entete)
+    monthly_prices.iloc[monthly_prices.iloc[:, :] == 'None'] = None
+    monthly_prices['date'] = pd.to_datetime(monthly_prices['date'])
+    monthly_prices[['eco zone', 'naics', 'gvkey', 'isin', 'exchg', 'curr']] = monthly_prices[['eco zone', 'naics', 'gvkey', 'isin', 'exchg', 'curr']].astype(str)
+    monthly_prices[[ 'csho', 'vol', 'adj_factor', 'pc', 'ph', 'pl', 'USDtocurr', 'pt', 'npt', 'ptvar', 'nptvar',
+                     'pptvar', 'npptvar', 'rc', 'nrc', 'rcvar', 'nrcvar']] = monthly_prices[[ 'csho', 'vol', 'adj_factor',
+                    'pc', 'ph', 'pl', 'USDtocurr', 'pt', 'npt', 'ptvar', 'nptvar',
+                     'pptvar', 'npptvar', 'rc', 'nrc', 'rcvar', 'nrcvar']].astype(float)
+    print(monthly_prices.info())
+    monthly_prices = monthly_prices.set_index('date')
+
+    #Group by cusip and apply the corrections
+    monthly_prices = monthly_prices[(monthly_prices['naics']=='52') & (monthly_prices['eco zone']=='GBP')]
+    print(monthly_prices[monthly_prices['csho'] == 0])
+
+    result = monthly_prices[['naics', 'isin', 'pc', 'csho', 'curr', 'USDtocurr']].groupby(['naics', 'isin']).apply(correct_stocks)
+    print(result)
+    # print(monthly_prices[['isin', 'csho', 'pc']].head())
+    # monthly_prices[['csho', 'pc']].rolling(3, min_periods=3).apply(correct_stocks, raw=True)
+    # print(monthly_prices[['isin', 'naics', 'csho']].groupby(['isin', 'naics']).apply(correct_stocks))
+
 
 def getSectorsPrice(params):
 
@@ -354,5 +447,38 @@ if __name__ == "__main__":
     # GetListofEcoZoneAndNaics(ProdConnectionString)
     # AddStocksPerNaicsAndEcoZone()
     # filterStocksPerTradeStocksExchange()
-    # SetSectorPriceToDB(TestConnectionString)
-    getSectorsPrice('')
+
+    stocks_by_sector = np.load('StocksBySectorWithLiquidExchg.npy')
+    stocks_by_sector = pd.DataFrame(stocks_by_sector, columns=['eco zone', 'naics', 'gvkey', 'isin', 'exchg'])
+    tabofMonth = GenerateMonthlyTab('2017-09', '2017-12')
+    tup = ()
+
+    for month in tabofMonth:
+        tup += monthly_stocks_price(month=month, stocks_by_sector=stocks_by_sector),
+    pool = Pool(4)
+    result = pool.map(SetSectorPriceToDB, tup)
+    pool.close()
+    pool.join()
+
+    df = pd.concat(result)
+    # print(df.columns)
+    monthly_prices = np.save('monthly_prices.npy', df)
+    # patch_stocks_price(monthly_prices)
+    # print(df)
+
+
+    # getSectorsPrice('')
+    # db = wrds.Connection()
+    # count = db.get_row_count(library='comp', table='g_funda')
+    # print(count)
+    #
+    # count = db.get_row_count(library='comp', table='g_fundq')
+    # print(count)
+    #
+    # count = db.get_row_count(library='comp', table='funda')
+    # print(count)
+    #
+    # count = db.get_row_count(library='comp', table='fundq')
+    # print(count)
+    #
+    # db.close()

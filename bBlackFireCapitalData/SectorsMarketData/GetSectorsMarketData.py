@@ -93,9 +93,10 @@ def SectorGrouping(group):
 
 def correct_stocks(group):
 
-    group.sort_index(inplace=True, ascending=True)
-    group[['csho', 'pc']] = group[['csho', 'pc']].fillna(method='bfill')
-    # return group[['csho', 'pc']]
+    group[['csho', 'adj_pc']] = group[['csho', 'adj_pc']].fillna(method='ffill')
+    group['return'] = group['adj_pc'].pct_change(fill_method='ffill')
+    group['pt_return'] = group[['adj_pc', 'pt']].pct_change(axis='columns')['pt']
+    return group
 
 
 def BulkWriteData(csho, vol, pc, ph, pl, nptvar, ptvar, npptvar, pptvar, rc, nrc, rcvar, nrcvar, eco, naics, date):
@@ -128,7 +129,6 @@ def GetListofEcoZoneAndNaics(connectionstring):
 def AddStocksPerNaicsAndEcoZone():
 
     my_path = Path(__file__).parent.parent.parent.resolve()
-    print(my_path)
     res = np.load('ZoneAndNaics.npy')
     StocksPriceInfos = np.load(str(my_path) + '/zBlackFireCapitalImportantFunctions/StocksPricesInfos.npy')
 
@@ -380,7 +380,10 @@ def patch_stocks_price(monthly_prices) -> pd.DataFrame:
     """""
     entete = ['eco zone', 'naics', 'gvkey', 'isin', 'exchg', 'curr', 'csho', 'vol', 'adj_factor', 'pc', 'ph', 'pl',
               'USDtocurr', 'pt', 'npt', 'ptvar', 'nptvar', 'pptvar', 'npptvar', 'rc', 'nrc', 'rcvar', 'nrcvar', 'date']
+
     monthly_prices = pd.DataFrame(monthly_prices, columns=entete)
+
+    # assign type to the columns
     monthly_prices.iloc[monthly_prices.iloc[:, :] == 'None'] = None
     monthly_prices['date'] = pd.to_datetime(monthly_prices['date'])
     monthly_prices[['eco zone', 'naics', 'gvkey', 'isin', 'exchg', 'curr']] = monthly_prices[['eco zone', 'naics', 'gvkey', 'isin', 'exchg', 'curr']].astype(str)
@@ -388,18 +391,30 @@ def patch_stocks_price(monthly_prices) -> pd.DataFrame:
                      'pptvar', 'npptvar', 'rc', 'nrc', 'rcvar', 'nrcvar']] = monthly_prices[[ 'csho', 'vol', 'adj_factor',
                     'pc', 'ph', 'pl', 'USDtocurr', 'pt', 'npt', 'ptvar', 'nptvar',
                      'pptvar', 'npptvar', 'rc', 'nrc', 'rcvar', 'nrcvar']].astype(float)
-    print(monthly_prices.info())
-    monthly_prices = monthly_prices.set_index('date')
 
-    #Group by cusip and apply the corrections
-    monthly_prices = monthly_prices[(monthly_prices['naics']=='52') & (monthly_prices['eco zone']=='GBP')]
-    print(monthly_prices[monthly_prices['csho'] == 0])
 
-    result = monthly_prices[['naics', 'isin', 'pc', 'csho', 'curr', 'USDtocurr']].groupby(['naics', 'isin']).apply(correct_stocks)
-    print(result)
-    # print(monthly_prices[['isin', 'csho', 'pc']].head())
-    # monthly_prices[['csho', 'pc']].rolling(3, min_periods=3).apply(correct_stocks, raw=True)
-    # print(monthly_prices[['isin', 'naics', 'csho']].groupby(['isin', 'naics']).apply(correct_stocks))
+    # set all null csho to None
+    monthly_prices.iloc[monthly_prices[monthly_prices['csho'] == 0].index, 6:7] = None
+
+    # Order columns by naics gvkey and isin
+    monthly_prices.sort_index(by=['naics','gvkey', 'isin', 'date'], ascending=[False, True, True, True], inplace=True)
+
+    # adjusted price
+    monthly_prices['adj_pc'] = monthly_prices['pc']/monthly_prices['adj_factor']
+
+    # fill csho, adjusted price by the previous value in cases of NaN and calculate returns
+    result = monthly_prices[['naics','gvkey', 'isin', 'csho', 'adj_pc', 'pt', 'date']].groupby(['naics', 'isin']).apply(correct_stocks)
+    entete.remove('csho')
+
+    # Merge Result to the DataFrame
+    monthly_prices = monthly_prices[entete]
+    monthly_prices = pd.merge(monthly_prices,
+                              result[['date', 'isin', 'gvkey', 'naics', 'csho', 'adj_pc', 'return', 'pt_return']],
+                              on=['date', 'isin', 'gvkey', 'naics'])
+
+    print(monthly_prices.columns)
+    return monthly_prices
+
 
 
 def getSectorsPrice(params):
@@ -448,22 +463,23 @@ if __name__ == "__main__":
     # AddStocksPerNaicsAndEcoZone()
     # filterStocksPerTradeStocksExchange()
 
-    stocks_by_sector = np.load('StocksBySectorWithLiquidExchg.npy')
-    stocks_by_sector = pd.DataFrame(stocks_by_sector, columns=['eco zone', 'naics', 'gvkey', 'isin', 'exchg'])
-    tabofMonth = GenerateMonthlyTab('2017-09', '2017-12')
-    tup = ()
-
-    for month in tabofMonth:
-        tup += monthly_stocks_price(month=month, stocks_by_sector=stocks_by_sector),
-    pool = Pool(4)
-    result = pool.map(SetSectorPriceToDB, tup)
-    pool.close()
-    pool.join()
-
-    df = pd.concat(result)
+    # stocks_by_sector = np.load('StocksBySectorWithLiquidExchg.npy')
+    # stocks_by_sector = pd.DataFrame(stocks_by_sector, columns=['eco zone', 'naics', 'gvkey', 'isin', 'exchg'])
+    # tabofMonth = GenerateMonthlyTab('1999-11', '2017-12')
+    # tup = ()
+    #
+    # for month in tabofMonth:
+    #     tup += monthly_stocks_price(month=month, stocks_by_sector=stocks_by_sector),
+    # pool = Pool(16)
+    # result = pool.map(SetSectorPriceToDB, tup)
+    # pool.close()
+    # pool.join()
+    #
+    # df = pd.concat(result)
     # print(df.columns)
-    monthly_prices = np.save('monthly_prices.npy', df)
-    # patch_stocks_price(monthly_prices)
+    monthly_prices = np.load('test.npy')
+    monthly_prices = patch_stocks_price(monthly_prices)
+    np.save('monthly_prices_adj', monthly_prices)
     # print(df)
 
 

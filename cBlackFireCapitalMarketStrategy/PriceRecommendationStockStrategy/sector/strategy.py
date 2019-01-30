@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 from sklearn import tree, metrics, svm, ensemble
+from pathlib import Path
 from sklearn.cross_validation import cross_val_score,  KFold, train_test_split
 from scipy.stats import sem
 
@@ -63,8 +64,21 @@ def train_and_evaluate(clf, x_tr, x_te, y_tr, y_te):
     print(metrics.classification_report(y_te, y_pr))
 
 
-def return_in_quantile(group):
+def return_in_quantile(group) -> pd.DataFrame:
 
+    """"
+    This fuction take a Dataframe as input and return a columns with a ranking from 1 to 10 given the feature
+
+    :param
+    group: Dataframe containing the values to rank
+    feature:  Name of the column to rank.
+
+    :return
+    Dataframe containing one column ranking with the features ranks.
+
+    """""
+    print(group.name)
+    print(group)
     Labels = ['1', '2', '3']
     tab_group = group[['ret']].quantile(np.array([0, 0.2, 0.8, 1]), numeric_only=False)
     group = group.fillna(np.nan)
@@ -75,7 +89,7 @@ def return_in_quantile(group):
     labels.remove('0')
     group['ranking_return'] = pd.cut(group['ret'],  x['ret'], labels=labels).values.add_categories('0').fillna('0')
 
-    return group[['date', 'naics', 'ranking_return']]
+    return group
 
 
 def calculate_return_by_quantile(group):
@@ -92,25 +106,31 @@ def calculate_return_by_quantile(group):
     return tab
 
 
-def group_in_quantile(group):
+def group_in_quantile(group, feature, quantiles) -> pd.DataFrame:
 
-    Labels = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
-    tab_group = group[['ptmvar', 'csmvar']].quantile(np.array([0, 0.1, 0.2, 0.3,0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]), numeric_only=False)
+    """"
+    This fuction take a Dataframe as input and return a columns with a ranking from 1 to 10 given the feature
+
+    :param
+    group: Dataframe containing the values to rank
+    feature:  Name of the column to rank.
+
+    :return
+    Dataframe containing one column ranking with the features ranks.
+
+    """""
+
+    Labels = [str(i + 1) for i in range(len(quantiles) - 1)]
+    tab_group = group[[feature]].quantile(np.array(quantiles), numeric_only=False)
     group = group.fillna(np.nan)
 
     tab_group['labels'] = ['0'] + Labels
-    x = tab_group[['csmvar', 'labels']].drop_duplicates(['csmvar'])
+    x = tab_group[[feature, 'labels']].drop_duplicates([feature])
     labels = list(x['labels'])
     labels.remove('0')
-    group['ranking_csmvar'] = pd.cut(group['csmvar'],  x['csmvar'], labels=labels).values.add_categories('0').fillna('0')
+    group['ranking_' + feature] = pd.cut(group[feature],  x[feature], labels=labels).values.add_categories('0').fillna('0')
 
-    tab_group['labels'] = ['0'] + Labels
-    x = tab_group[['ptmvar', 'labels']].drop_duplicates(['ptmvar'])
-    labels = list(x['labels'])
-    labels.remove('0')
-    group['ranking_ptmvar'] = pd.cut(group['ptmvar'],  x['ptmvar'], labels=labels).values.add_categories('0').fillna('0')
-
-    return group[['date', 'naics', 'ranking_ptmvar', 'ranking_csmvar']]
+    return group
 
 
 def get_sector_return(eco, naics, pc, ecop, naicsp, pcp):
@@ -287,7 +307,7 @@ def strategy_by_sector_for_eco_zone(eco_zone):
 
     #Ranking Stocks Returns
     result = tab_data.groupby(tab_data['date']).apply(return_in_quantile)
-    tab_data = pd.merge(tab_data, result, on=['naics', 'date'])
+    tab_data = pd.merge(tab_data, result[['date', 'naics', 'ranking_return']], on=['naics', 'date'])
 
     # Ranking of Feature by month
     result = tab_data[['date', 'naics', 'ptmvar', 'csmvar']].groupby(tab_data['date']).apply(group_in_quantile)
@@ -347,8 +367,73 @@ def strategy_by_sector_for_eco_zone(eco_zone):
     plt.show()
 
 
+def strategy_by_stocks_in_eco_zone(eco_zone):
+
+    my_path = Path(__file__).parent.parent.parent.parent.resolve()
+
+    monthly_prices = np.load(str(my_path) + '/bBlackFireCapitalData/SectorsMarketData/monthly_prices_adj.npy')
+
+    entete = ['eco zone', 'naics', 'gvkey', 'isin', 'exchg', 'curr', 'vol', 'adj_factor', 'pc', 'ph', 'pl', 'USDtocurr',
+              'pt', 'npt', 'ptvar', 'nptvar', 'pptvar', 'npptvar', 'rc', 'nrc', 'rcvar', 'nrcvar', 'date', 'csho',
+              'adj_pc', 'return', 'pt_return']
+
+    monthly_prices = pd.DataFrame(monthly_prices, columns=entete)
+    monthly_prices = monthly_prices[(monthly_prices['eco zone'] == eco_zone)&(monthly_prices['naics'].isin(['111', '211']))]
+    monthly_prices  = monthly_prices.drop_duplicates(['date', 'isin'])
+    np.save('xx', monthly_prices)
+
+    #TODO: Change Date in month Format.
+
+    # Filter all NAICS of level 2
+    monthly_prices = monthly_prices[monthly_prices['naics'].isin(getSectorForLevel(2))]
+    monthly_prices = monthly_prices.sort_values(["naics", "date"], ascending=[True, True]).reset_index(drop=True)
+    monthly_prices['date'] = pd.to_datetime(monthly_prices['date'])
+    print(monthly_prices.info())
+
+    # Ranking Stocks Returns
+    quantiles = [0, 0.2, 0.8, 1]
+    result = monthly_prices[['date', 'naics', 'isin', 'return']].groupby(['naics', 'date']).apply(group_in_quantile, 'return', quantiles)
+    monthly_prices = pd.merge(monthly_prices, result[['date', 'isin', 'ranking_return']])
+
+    # Ranking of Feature by month
+    # --> Price Target
+    quantiles = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
+    result = monthly_prices[['date', 'naics', 'isin', 'pt']].groupby(['naics', 'date']).apply(group_in_quantile, 'pt', quantiles)
+    monthly_prices = pd.merge(monthly_prices, result[['date', 'isin', 'ranking_pt']])
+
+    # --> Mean variation of Price Target
+    quantiles = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
+    result = monthly_prices[['date', 'naics', 'isin', 'ptvar']].groupby(['naics', 'date']).apply(group_in_quantile, 'ptvar', quantiles)
+    monthly_prices = pd.merge(monthly_prices, result[['date', 'isin', 'ranking_ptvar']])
+
+    #Calcul du Zscore 12 mo pour les Features ptvar et rcvar
+    result = monthly_prices.set_index('date')
+    result = result[['naics', 'isin', 'ptvar']].groupby(['naics', 'isin']).rolling(12, min_periods=9).apply(z_score)
+    result = result.reset_index()
+    result = result[result['date'] > datetime(2000,12,1)]
+
+    print(result.tail(10))
+    print(monthly_prices.shape)
+
+
+    return
+
+    #Ranking of Naics Zscore by month
+    result = result[['date', 'naics', 'ptmvar', 'csmvar']].groupby(result['date']).apply(group_in_quantile)
+    result.columns = ['date', 'naics', 'historical_ranking_ptmvar', 'historical_ranking_csmvar']
+    tab_data = pd.merge(tab_data, result, on=['naics', 'date'])
+    tab_data[['historical_ranking_ptmvar', 'historical_ranking_csmvar']] = tab_data[['historical_ranking_ptmvar', 'historical_ranking_csmvar']].astype(int)
+
+
+    result = monthly_prices[['date', 'naics', 'ptmvar', 'csmvar']].groupby(['naics', 'date']).apply(group_in_quantile,  feature)
+    monthly_prices = pd.merge(monthly_prices, result[['naics', 'date', 'ranking_ptmvar', 'ranking_csmvar']], on=['naics', 'date', 'isin'])
+    monthly_prices[['ranking_ptmvar', 'ranking_csmvar']] = monthly_prices[['ranking_ptmvar', 'ranking_csmvar']].astype(int)
+
+
+
 if __name__ == "__main__":
 
     # PlotData()
-    strategy_by_sector_for_eco_zone("USD")
+    # strategy_by_sector_for_eco_zone("USD")
+    strategy_by_stocks_in_eco_zone("USD")
     # strategy_wld()

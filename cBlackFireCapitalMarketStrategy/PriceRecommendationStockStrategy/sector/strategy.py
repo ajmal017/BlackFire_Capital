@@ -409,21 +409,24 @@ def strategy_by_stocks_in_eco_zone(eco_zone):
     #Calcul du Zscore 12 mo pour les Features ptvar et rcvar
     result = monthly_prices.set_index('date')
     result = result[['naics', 'isin', 'ptvar']].groupby(['naics', 'isin']).rolling(12, min_periods=9).apply(z_score)
+    print(result.tail(10))
     result = result.reset_index()
+    print(result.tail(10))
+
+    result = result[['ptvar']].dropna()
     result = result[result['date'] > datetime(2000,12,1)]
 
-    print(result.tail(10))
     print(monthly_prices.shape)
 
 
     return
-
     #Ranking of Naics Zscore by month
-    result = result[['date', 'naics', 'ptmvar', 'csmvar']].groupby(result['date']).apply(group_in_quantile)
-    result.columns = ['date', 'naics', 'historical_ranking_ptmvar', 'historical_ranking_csmvar']
-    tab_data = pd.merge(tab_data, result, on=['naics', 'date'])
-    tab_data[['historical_ranking_ptmvar', 'historical_ranking_csmvar']] = tab_data[['historical_ranking_ptmvar', 'historical_ranking_csmvar']].astype(int)
+    result = result[['date', 'naics', 'isin', 'ptvar']].groupby(['naics', 'date']).apply(group_in_quantile, 'ptvar', quantiles)
+    result.columns = ['date', 'naics', 'historical_ranking_ptvar']
+    monthly_prices = pd.merge(monthly_prices, result, on=['naics', 'date'])
+    monthly_prices[['historical_ranking_ptvar']] = monthly_prices[['historical_ranking_ptmvar']].astype(int)
 
+    return
 
     result = monthly_prices[['date', 'naics', 'ptmvar', 'csmvar']].groupby(['naics', 'date']).apply(group_in_quantile,  feature)
     monthly_prices = pd.merge(monthly_prices, result[['naics', 'date', 'ranking_ptmvar', 'ranking_csmvar']], on=['naics', 'date', 'isin'])

@@ -85,7 +85,7 @@ class StocksMarketDataPrice:
         #index = self.data[0]
 
         yield self.database.create_index([("isin_or_cusip", pymongo.DESCENDING),
-                                  ("date", pymongo.DESCENDING),])
+                                  ("date", pymongo.DESCENDING), ("curr", pymongo.DESCENDING), ])
 
     async def GetMontlyPrice(self) -> pd.DataFrame:
 

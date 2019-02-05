@@ -28,6 +28,11 @@ __INDICE_FOR_VAR__ = ['eco zone', 'naics', 'pc']
 __ACTUAL__ = ''
 __PREV__ = '_prev'
 
+def calculate_benchmark(group):
+
+    monthly_return = (group['csho'] * group['return'] * group['pc']).sum()/(group['csho'] * group['pc']).sum()
+    return monthly_return
+    return pd.DataFrame([[group.name[0], group.name[1], monthly_return]], columns=['naics', 'date', 'return'])
 
 def z_score(group):
     return (group[-1] - group.mean()) / group.std()
@@ -86,25 +91,44 @@ def return_in_quantile(group) -> pd.DataFrame:
     return group
 
 
-def calculate_return_by_quantile(group):
-    tab = [['EW'], ['MW']]
+def calculate_return_by_quantile(group, column_name):
+
+
+    tab = [[], []]
     for i in range(1, 11):
-        t = group[group.loc[:, 'historical_ranking_ptvar'] == i]
-        try:
-            tab[0].append(t["return"].mean() + 1)
-        except ZeroDivisionError:
-            tab[0].append(1)
+        t = group[group.loc[:, column_name] == i]
+        if t["return"].mean() == np.nan:
+            tab[0].append(0)
+        else:
+            tab[0].append(t["return"].mean())
 
         try:
-            tab[1].append((t['csho'] * t['return']).sum() / t['csho'].sum() + 1)
+            tab[1].append((t['csho'] * t['return']).sum() / t['csho'].sum())
         except ZeroDivisionError:
-            tab[1].append(1)
-    tab = pd.DataFrame(tab, columns=['Type'] + ['Q' + str(i) for i in range(1, 11)])
-    tab['l/s'] = 1 + (1.3 * (tab['Q9'] - 1) - 0.3 * (tab['Q2'] - 1))
-    tab['date'] = group.name
-    print(group)
-    print(tab)
+            tab[1].append(0)
+    tab = pd.DataFrame(tab, columns=['Q' + str(i) for i in range(1, 11)])
+    tab['l/s (130/30)'] = 1.3 * tab['Q10']  - 0.3 * tab['Q1']
+    tab['l/s (150/50)'] = 1.5 * tab['Q10']  - 0.5 * tab['Q1']
+    tab.fillna(0, inplace=True)
+    if group.name[0].year == 2002:
+        print(group.name)
+        print(group[group['historical_ranking_pt_return'] == 1][['isin', 'csho', 'return']])
+        print(tab[["Q1", 'Q10']])
+
     return tab
+
+
+def cum_prod_return(group):
+
+    print(group.name)
+
+    group = group + 1
+    group.fillna(1, inplace=True)
+    group.iloc[0:1, :] = 100
+    group = group.cumprod()
+    print(group.tail(10))
+
+    return group.reset_index()
 
 
 def group_in_quantile(group, feature, quantiles) -> pd.DataFrame:
@@ -119,18 +143,16 @@ def group_in_quantile(group, feature, quantiles) -> pd.DataFrame:
     Dataframe containing one column ranking with the features ranks.
 
     """""
-
-    Labels = [str(i + 1) for i in range(len(quantiles) - 1)]
+    labels = [str(i + 1) for i in range(len(quantiles) - 1)]
     tab_group = group[[feature]].quantile(np.array(quantiles), numeric_only=False)
     group = group.fillna(np.nan)
 
-    tab_group['labels'] = ['0'] + Labels
+    tab_group['labels'] = ['0'] + labels
     x = tab_group[[feature, 'labels']].drop_duplicates([feature])
     labels = list(x['labels'])
     labels.remove('0')
     group['ranking_' + feature] = pd.cut(group[feature], x[feature], labels=labels).values.add_categories('0').fillna(
         '0')
-
     return group
 
 
@@ -148,8 +170,13 @@ def get_sector_return(eco, naics, pc, ecop, naicsp, pcp):
 
 
 def shift_stocks_return(group, periode):
-    group['return'] = group['return'].shift(periods=periode)
-    return group
+
+    group['index'] = group.index
+    group = group.set_index('date')
+    t = group[['return']].shift(periods=periode, freq='M')
+    group.loc[:, 'return'] = t['return']
+
+    return group.set_index('index')[['return']]
 
 
 def get_next_monthly_return(eco, naics, ecop, naicsp, ret):
@@ -372,33 +399,44 @@ def strategy_by_sector_for_eco_zone(eco_zone):
 
 
 def strategy_by_stocks_in_eco_zone(eco_zone):
-    my_path = Path(__file__).parent.parent.parent.parent.resolve()
 
-    # monthly_prices = np.load(str(my_path) + '/bBlackFireCapitalData/SectorsMarketData/monthly_prices_adj.npy')
-    monthly_prices = np.load('xx.npy')
-    entete = ['eco zone', 'naics', 'gvkey', 'isin', 'exchg', 'curr', 'vol', 'adj_factor', 'pc', 'ph', 'pl', 'USDtocurr',
-              'pt', 'npt', 'ptvar', 'nptvar', 'pptvar', 'npptvar', 'rc', 'nrc', 'rcvar', 'nrcvar', 'date', 'csho',
-              'adj_pc', 'return', 'pt_return']
+    my_path = Path(__file__).parent.parent.parent.parent.resolve()
+    monthly_prices = np.load(str(my_path) + '/bBlackFireCapitalData/SectorsMarketData/monthly_prices_adj_us.npy')
+    entete = ['eco zone', 'naics', 'gvkey', 'isin', 'exchg', 'USDtocurr', 'adj_factor', 'date',
+                                       'pc', 'ph', 'pl', 'vol', 'curr', 'pt', 'npt', 'pptvar', 'npptvar', 'ptvar',
+                                       'nptvar', 'rc', 'nrc', 'rcvar', 'nrcvar', 'csho', 'adj_pc', 'return',
+                                       'pt_return']
 
     monthly_prices = pd.DataFrame(monthly_prices, columns=entete)
     monthly_prices = monthly_prices[(monthly_prices['eco zone'] == eco_zone) &
-                                    (monthly_prices['naics'].isin(['111', '211']))]
-    monthly_prices = monthly_prices.drop_duplicates(['date', 'isin'])
+                                    (monthly_prices['naics'].isin(['441']))]
+    monthly_prices.loc[monthly_prices['pt_return'] == 0, 'pt_return'] = None
+    print(monthly_prices.info())
 
-    monthly_prices['date'] = monthly_prices.date + pd.offsets.MonthEnd(0)
+    # np.save('xx.npy', monthly_prices)
 
-    monthly_prices.loc[monthly_prices['pt'].isna(), 'pt_return'] = None
 
     # Filter all NAICS of level 2
     monthly_prices = monthly_prices[monthly_prices['naics'].isin(getSectorForLevel(2))]
-    monthly_prices = monthly_prices.sort_values(["naics", "date"], ascending=[True, True]).reset_index(drop=True)
-    monthly_prices['date'] = pd.to_datetime(monthly_prices['date'])
-    print(monthly_prices.info())
+    monthly_prices = monthly_prices.sort_values(["naics", "isin", "date"], ascending=[True, True, True]).reset_index(drop=True)
+    monthly_prices['date'] = pd.DatetimeIndex(monthly_prices['date'])
+
+    # Calcul of Market Cap.
+    # monthly_prices.loc[:, 'mc'] = monthly_prices['pc'] * monthly_prices['csho']
+    # monthly_prices = monthly_prices[monthly_prices['mc'] > 100000000]
 
     # Shift Stocks returns
-    result = monthly_prices[['date', 'isin', 'return']].groupby(['isin']).apply(shift_stocks_return, -1)
+    result = monthly_prices[['date', 'isin', 'pc', 'return']].groupby(['isin']).apply(shift_stocks_return, -1)
     monthly_prices['return'] = result['return']
-    monthly_prices = monthly_prices[monthly_prices['date'] < datetime(2017, 12, 1)]
+
+    # Calcul of BenchMark
+    result = monthly_prices[['date', 'naics','pc', 'return', 'csho']].groupby(['naics', 'date']).apply(calculate_benchmark)
+    result = result.reset_index().set_index('date').shift(periods=1, freq='M').reset_index()
+    result.rename(columns={0: 'Benchmark'}, inplace=True)
+    benchmark = result
+
+    # Remove all None return
+    monthly_prices.dropna(subset=['return'], inplace=True)
 
     # Ranking Stocks Returns
     quantiles = [0, 0.2, 0.8, 1]
@@ -414,6 +452,7 @@ def strategy_by_stocks_in_eco_zone(eco_zone):
                                                                                                      quantiles)
     monthly_prices = pd.merge(monthly_prices, result[['date', 'isin', 'ranking_pt_return']])
 
+
     # --> Mean variation of Price Target
     quantiles = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
     result = monthly_prices[['date', 'naics', 'isin', 'ptvar']].groupby(['naics', 'date']).apply(group_in_quantile,
@@ -422,13 +461,16 @@ def strategy_by_stocks_in_eco_zone(eco_zone):
 
     # Calculation of 12 month z score for features ptvar, pt et rcvar
     result = monthly_prices.set_index('date')
+
     result = result[['naics', 'isin', 'ptvar', 'pt_return']].groupby(['naics', 'isin']).rolling(12,
                                                                                                 min_periods=9).apply(
         z_score)
+
     result = result.reset_index()
     result = result[result['date'] > datetime(2000, 12, 1)]
 
     # Ranking of Naics z score by month
+
     # --> Price Target Variation
     _ = result[['date', 'naics', 'isin', 'ptvar']].groupby(['naics', 'date']).apply(group_in_quantile, 'ptvar',
                                                                                     quantiles)
@@ -441,13 +483,31 @@ def strategy_by_stocks_in_eco_zone(eco_zone):
     _.rename(columns={'ranking_pt_return': 'historical_ranking_pt_return'}, inplace=True)
     monthly_prices = pd.merge(monthly_prices, _[['date', 'isin', 'historical_ranking_pt_return']], on=['isin', 'date'])
 
-    monthly_prices['historical_ranking_ptvar'] = monthly_prices['historical_ranking_ptvar'].astype(int)
-    result = monthly_prices[['date', 'naics', 'csho', 'return', 'historical_ranking_ptvar']].groupby(['date', 'naics']).apply(
-        calculate_return_by_quantile).reset_index().set_index('date')
-    # result.iloc[[0, 1], 1:12] = 100
-    result = result[result['Type'] == 'MW']
-    result = result.groupby(result['naics']).cumprod()
-    print(result.tail())
+
+
+    monthly_prices['historical_ranking_pt_return'] = monthly_prices['historical_ranking_pt_return'].astype(int)
+
+    result = monthly_prices[['date', 'naics', 'csho', 'return', 'historical_ranking_pt_return', 'isin']].groupby(['date', 'naics']).apply(
+        calculate_return_by_quantile, 'historical_ranking_pt_return').reset_index()
+    # return
+    result.to_excel('x.xlsx')
+    result.rename(columns={'level_2': 'Type'}, inplace=True)
+    result.loc[ :, 'Type'] = result['Type'].map({0: 'EW', 1: 'MW'})
+
+    benchmark['date'] = pd.DatetimeIndex(benchmark['date'])
+    result = pd.merge(result, benchmark, on=['date', 'naics'], )
+
+    result.set_index('date', inplace=True)
+    result = result.groupby(['naics', 'Type']).apply(cum_prod_return).reset_index()
+    result.set_index('date', inplace=True)
+    # result = result.sort_values(["Type","naics", "date"], ascending=[True, True, True]).reset_index(drop=True)
+    # return
+    result.to_excel("output.xlsx")
+    print(result)
+    result[result['Type'] == 'MW'][['Benchmark','Q10', 'Q1', 'l/s (130/30)', 'l/s (150/50)']].plot()
+    plt.show()
+    return
+    # result.drop_duplicates(['naics'], keep='last', inplace=True)
 
     # monthly_prices[['historical_ranking_ptvar']] = monthly_prices[['historical_ranking_ptmvar']].astype(int)
 

@@ -1,4 +1,5 @@
 # from bBlackFireCapitalData.SectorsMarketData.GetSectorsMarketInfos import getsectorinlevel
+from aBlackFireCapitalClass.ClassStrategyStatistics.displaysheet import DisplaysheetStatistics
 from bBlackFireCapitalData.SectorsMarketData.GetSectorsMarketInfos import getSectorForLevel
 from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import profile
 
@@ -59,9 +60,8 @@ def train_and_evaluate(clf, x_tr, x_te, y_tr, y_te):
 
 def calculate_benchmark(group):
 
-    monthly_return = (group['csho'] * group['return'] * group['pc']).sum()/(group['csho'] * group['pc']).sum()
+    monthly_return = (group['mc'] * group['return']).sum()/group['mc'].sum()
     return monthly_return
-    return pd.DataFrame([[group.name[0], group.name[1], monthly_return]], columns=['naics', 'date', 'return'])
 
 
 def z_score(group):
@@ -228,6 +228,12 @@ def get_sectors_price(params):
 
     ClientDB.close()
 
+########################################################################################################################
+#                                                                                                                      #
+# Section 3: Strategy Implementation                                                                                   #
+#                                                                                                                      #
+########################################################################################################################
+
 
 
 def strategy_by_sector_for_eco_zone(eco_zone):
@@ -248,6 +254,10 @@ def strategy_by_sector_for_eco_zone(eco_zone):
     monthly_prices = monthly_prices[monthly_prices['naics'].isin(getSectorForLevel(2))]
     monthly_prices = monthly_prices.sort_values(["eco zone", "naics", "date"], ascending=[True, True, True]).reset_index(drop=True)
     monthly_prices['date'] = pd.DatetimeIndex(monthly_prices['date'])
+
+    #Benchmark
+    Benchmark = monthly_prices[['mc', 'return']].groupby(monthly_prices['date']).apply(calculate_benchmark)
+    Benchmark = pd.DataFrame(Benchmark, columns=['benchmark'])
 
     # Shift Stocks returns
     result = monthly_prices[['date', 'eco zone', 'naics', 'return']].groupby(['eco zone', 'naics']).apply(shift_stocks_return, -1)
@@ -283,26 +293,26 @@ def strategy_by_sector_for_eco_zone(eco_zone):
                                                                                                      quantiles)
     monthly_prices = pd.merge(monthly_prices, result[['date', 'naics', 'ranking_mpt_return']])
 
-    # --> Mean Price Target Return Variation
-    quantiles = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
-    result = monthly_prices[['date', 'naics', 'eco zone', 'ptvar']].groupby(['eco zone', 'date']).apply(group_in_quantile,
-                                                                                                     'ptvar',
-                                                                                                     quantiles)
-    monthly_prices = pd.merge(monthly_prices, result[['date', 'naics', 'ranking_ptvar']])
-
-    # --> Mean recommendation
-    quantiles = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
-    result = monthly_prices[['date', 'naics', 'eco zone', 'rc']].groupby(['eco zone', 'date']).apply(group_in_quantile,
-                                                                                                     'rc',
-                                                                                                     quantiles)
-    monthly_prices = pd.merge(monthly_prices, result[['date', 'naics', 'ranking_rc']])
-
-    # --> Mean recommendation var
-    quantiles = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
-    result = monthly_prices[['date', 'naics', 'eco zone', 'rcvar']].groupby(['eco zone', 'date']).apply(group_in_quantile,
-                                                                                                     'rcvar',
-                                                                                                     quantiles)
-    monthly_prices = pd.merge(monthly_prices, result[['date', 'naics', 'ranking_rcvar']])
+    # # --> Mean Price Target Return Variation
+    # quantiles = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
+    # result = monthly_prices[['date', 'naics', 'eco zone', 'ptvar']].groupby(['eco zone', 'date']).apply(group_in_quantile,
+    #                                                                                                  'ptvar',
+    #                                                                                                  quantiles)
+    # monthly_prices = pd.merge(monthly_prices, result[['date', 'naics', 'ranking_ptvar']])
+	#
+    # # --> Mean recommendation
+    # quantiles = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
+    # result = monthly_prices[['date', 'naics', 'eco zone', 'rc']].groupby(['eco zone', 'date']).apply(group_in_quantile,
+    #                                                                                                  'rc',
+    #                                                                                                  quantiles)
+    # monthly_prices = pd.merge(monthly_prices, result[['date', 'naics', 'ranking_rc']])
+	#
+    # # --> Mean recommendation var
+    # quantiles = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
+    # result = monthly_prices[['date', 'naics', 'eco zone', 'rcvar']].groupby(['eco zone', 'date']).apply(group_in_quantile,
+    #                                                                                                  'rcvar',
+    #                                                                                                  quantiles)
+    # monthly_prices = pd.merge(monthly_prices, result[['date', 'naics', 'ranking_rcvar']])
 
     ###################################################################################################################
     #
@@ -326,11 +336,11 @@ def strategy_by_sector_for_eco_zone(eco_zone):
     #
     ###################################################################################################################
 
-    # --> Price Target Variation
-    _ = result[['date','eco zone', 'naics', 'ptvar']].groupby(['eco zone', 'date']).apply(group_in_quantile, 'ptvar',
-                                                                                    quantiles)
-    _.rename(columns={'ranking_ptvar': 'historical_ranking_ptvar'}, inplace=True)
-    monthly_prices = pd.merge(monthly_prices, _[['date', 'naics', 'historical_ranking_ptvar']], on=['naics', 'date'])
+    # # --> Price Target Variation
+    # _ = result[['date','eco zone', 'naics', 'ptvar']].groupby(['eco zone', 'date']).apply(group_in_quantile, 'ptvar',
+    #                                                                                 quantiles)
+    # _.rename(columns={'ranking_ptvar': 'historical_ranking_ptvar'}, inplace=True)
+    # monthly_prices = pd.merge(monthly_prices, _[['date', 'naics', 'historical_ranking_ptvar']], on=['naics', 'date'])
 
     # --> Price Target return
     _ = result[['date','eco zone', 'naics', 'pt_return']].groupby(['eco zone', 'date']).apply(group_in_quantile, 'pt_return',
@@ -345,24 +355,36 @@ def strategy_by_sector_for_eco_zone(eco_zone):
     monthly_prices = pd.merge(monthly_prices, _[['date', 'naics', 'historical_ranking_mpt_return']], on=['naics', 'date'])
 
 
-    # --> Mean recommendation
-    _ = result[['date','eco zone', 'naics', 'rc']].groupby(['eco zone', 'date']).apply(group_in_quantile, 'rc',
-                                                                                    quantiles)
-    _.rename(columns={'ranking_rc': 'historical_ranking_rc'}, inplace=True)
-    monthly_prices = pd.merge(monthly_prices, _[['date', 'naics', 'historical_ranking_rc']], on=['naics', 'date'])
-
-    # --> Mean recommendation variation
-    _ = result[['date','eco zone', 'naics', 'rcvar']].groupby(['eco zone', 'date']).apply(group_in_quantile, 'rcvar',
-                                                                                    quantiles)
-    _.rename(columns={'ranking_rcvar': 'historical_ranking_rcvar'}, inplace=True)
-    monthly_prices = pd.merge(monthly_prices, _[['date', 'naics', 'historical_ranking_rcvar']], on=['naics', 'date'])
+    # # --> Mean recommendation
+    # _ = result[['date','eco zone', 'naics', 'rc']].groupby(['eco zone', 'date']).apply(group_in_quantile, 'rc',
+    #                                                                                 quantiles)
+    # _.rename(columns={'ranking_rc': 'historical_ranking_rc'}, inplace=True)
+    # monthly_prices = pd.merge(monthly_prices, _[['date', 'naics', 'historical_ranking_rc']], on=['naics', 'date'])
+	#
+    # # --> Mean recommendation variation
+    # _ = result[['date','eco zone', 'naics', 'rcvar']].groupby(['eco zone', 'date']).apply(group_in_quantile, 'rcvar',
+    #                                                                                 quantiles)
+    # _.rename(columns={'ranking_rcvar': 'historical_ranking_rcvar'}, inplace=True)
+    # monthly_prices = pd.merge(monthly_prices, _[['date', 'naics', 'historical_ranking_rcvar']], on=['naics', 'date'])
 
     ###################################################################################################################
     #
     # Return of Quantile by feature
     #
     ###################################################################################################################
+    print(monthly_prices.info())
 
+    portfolio = monthly_prices[['date', 'eco zone', 'naics', 'return', 'mc', 'historical_ranking_pt_return']]
+    portfolio.columns = ['date', 'group', 'constituent', 'return', 'mc', 'signal']
+
+
+    portfolio = portfolio[portfolio['signal'] == '10']
+
+    portfolio.loc[:, 'signal'] = 'buy'
+    stat = DisplaysheetStatistics(portfolio,'Sector selection', Benchmark)
+    stat.plot_results()
+
+    return
     monthly_prices['historical_ranking_pt_return'] = monthly_prices['historical_ranking_ptvar'].astype(int)
     print('done')
     result = monthly_prices[['date', 'naics', 'mc', 'return', 'historical_ranking_pt_return', 'eco zone']].groupby(['date', 'eco zone']).apply(
@@ -409,7 +431,7 @@ def strategy_by_stocks_in_eco_zone(eco_zone):
     monthly_prices['date'] = pd.DatetimeIndex(monthly_prices['date'])
 
     # Calcul of Market Cap.
-    monthly_prices.loc[:, 'mc'] = monthly_prices['pc'] * monthly_prices['csho']
+    monthly_prices.loc[:, 'mc'] =  monthly_prices.loc[:, 'csho'] * monthly_prices.loc[:, 'pc'] / monthly_prices.loc[:, 'USDtocurr']
     # monthly_prices = monthly_prices[monthly_prices['mc'] > 100000000]
 
     # Shift Stocks returns
@@ -417,10 +439,10 @@ def strategy_by_stocks_in_eco_zone(eco_zone):
     monthly_prices['return'] = result['return']
 
     # Calcul of BenchMark
-    result = monthly_prices[['date', 'naics','pc', 'return', 'csho']].groupby(['naics', 'date']).apply(calculate_benchmark)
-    result = result.reset_index().set_index('date').shift(periods=1, freq='M').reset_index()
-    result.rename(columns={0: 'Benchmark'}, inplace=True)
-    benchmark = result
+    # result = monthly_prices[['date', 'naics','pc', 'return', 'csho']].groupby(['naics', 'date']).apply(calculate_benchmark)
+    # result = result.reset_index().set_index('date').shift(periods=1, freq='M').reset_index()
+    # result.rename(columns={0: 'Benchmark'}, inplace=True)
+    # benchmark = result
 
     # Remove all None return
     monthly_prices.dropna(subset=['return'], inplace=True)
@@ -471,46 +493,21 @@ def strategy_by_stocks_in_eco_zone(eco_zone):
     monthly_prices = pd.merge(monthly_prices, _[['date', 'isin', 'historical_ranking_pt_return']], on=['isin', 'date'])
 
 
+    portfolio = monthly_prices[['date', 'naics', 'isin', 'return', 'mc', 'historical_ranking_pt_return']]
+    portfolio.columns = ['date', 'group', 'constituent', 'return', 'mc', 'signal']
 
-    monthly_prices['historical_ranking_pt_return'] = monthly_prices['historical_ranking_pt_return'].astype(int)
 
-    result = monthly_prices[['date', 'naics', 'mc', 'return', 'historical_ranking_pt_return', 'isin']].groupby(['date', 'naics']).apply(
-        calculate_return_by_quantile, 'historical_ranking_pt_return').reset_index()
-    # return
-    result.to_excel('x.xlsx')
-    result.rename(columns={'level_2': 'Type'}, inplace=True)
-    result.loc[ :, 'Type'] = result['Type'].map({0: 'EW', 1: 'MW'})
+    portfolio = portfolio[portfolio['signal'] == '10']
 
-    benchmark['date'] = pd.DatetimeIndex(benchmark['date'])
-    result = pd.merge(result, benchmark, on=['date', 'naics'], )
+    portfolio.loc[:, 'signal'] = 'buy'
+    stat = DisplaysheetStatistics(portfolio,'Sector selection')
+    stat.plot_results()
 
-    result.set_index('date', inplace=True)
-    result = result.groupby(['naics', 'Type']).apply(cum_prod_return).reset_index()
-    result.set_index('date', inplace=True)
-    # result = result.sort_values(["Type","naics", "date"], ascending=[True, True, True]).reset_index(drop=True)
-    # return
-    result.to_excel("output.xlsx")
-    print(result)
-    result[result['Type'] == 'MW'][['Benchmark','Q10', 'Q1']].plot()
-    plt.show()
-    return
-    # result.drop_duplicates(['naics'], keep='last', inplace=True)
-
-    # monthly_prices[['historical_ranking_ptvar']] = monthly_prices[['historical_ranking_ptmvar']].astype(int)
-
-    return
-
-    result = monthly_prices[['date', 'naics', 'ptmvar', 'csmvar']].groupby(['naics', 'date']).apply(group_in_quantile,
-                                                                                                    feature)
-    monthly_prices = pd.merge(monthly_prices, result[['naics', 'date', 'ranking_ptmvar', 'ranking_csmvar']],
-                              on=['naics', 'date', 'isin'])
-    monthly_prices[['ranking_ptmvar', 'ranking_csmvar']] = monthly_prices[['ranking_ptmvar', 'ranking_csmvar']].astype(
-        int)
 
 
 if __name__ == "__main__":
     # PlotData()
     # strategy_by_sector_for_eco_zone("USD")
-    # strategy_by_stocks_in_eco_zone("USD")
-    strategy_by_sector_for_eco_zone('USD')
+    strategy_by_stocks_in_eco_zone("USD")
+    # strategy_by_sector_for_eco_zone('USD')
     # strategy_wld()

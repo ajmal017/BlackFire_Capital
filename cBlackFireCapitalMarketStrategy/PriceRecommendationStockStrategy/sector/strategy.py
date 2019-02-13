@@ -235,9 +235,7 @@ def get_sectors_price(params):
 ########################################################################################################################
 
 
-
 def strategy_by_sector_for_eco_zone(eco_zone):
-
 
     my_path = Path(__file__).parent.parent.parent.parent.resolve()
     monthly_prices = np.load(str(my_path) + '/bBlackFireCapitalData/SectorsMarketData/monthly_sectors_prices_us.npy')
@@ -293,13 +291,13 @@ def strategy_by_sector_for_eco_zone(eco_zone):
                                                                                                      quantiles)
     monthly_prices = pd.merge(monthly_prices, result[['date', 'naics', 'ranking_mpt_return']])
 
-    # # --> Mean Price Target Return Variation
-    # quantiles = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
-    # result = monthly_prices[['date', 'naics', 'eco zone', 'ptvar']].groupby(['eco zone', 'date']).apply(group_in_quantile,
-    #                                                                                                  'ptvar',
-    #                                                                                                  quantiles)
-    # monthly_prices = pd.merge(monthly_prices, result[['date', 'naics', 'ranking_ptvar']])
-	#
+    # --> Mean Price Target Return Variation
+    quantiles = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
+    result = monthly_prices[['date', 'naics', 'eco zone', 'ptvar']].groupby(['eco zone', 'date']).apply(group_in_quantile,
+                                                                                                     'ptvar',
+                                                                                                     quantiles)
+    monthly_prices = pd.merge(monthly_prices, result[['date', 'naics', 'ranking_ptvar']])
+
     # # --> Mean recommendation
     # quantiles = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
     # result = monthly_prices[['date', 'naics', 'eco zone', 'rc']].groupby(['eco zone', 'date']).apply(group_in_quantile,
@@ -336,11 +334,11 @@ def strategy_by_sector_for_eco_zone(eco_zone):
     #
     ###################################################################################################################
 
-    # # --> Price Target Variation
-    # _ = result[['date','eco zone', 'naics', 'ptvar']].groupby(['eco zone', 'date']).apply(group_in_quantile, 'ptvar',
-    #                                                                                 quantiles)
-    # _.rename(columns={'ranking_ptvar': 'historical_ranking_ptvar'}, inplace=True)
-    # monthly_prices = pd.merge(monthly_prices, _[['date', 'naics', 'historical_ranking_ptvar']], on=['naics', 'date'])
+    # --> Price Target Variation
+    _ = result[['date','eco zone', 'naics', 'ptvar']].groupby(['eco zone', 'date']).apply(group_in_quantile, 'ptvar',
+                                                                                    quantiles)
+    _.rename(columns={'ranking_ptvar': 'historical_ranking_ptvar'}, inplace=True)
+    monthly_prices = pd.merge(monthly_prices, _[['date', 'naics', 'historical_ranking_ptvar']], on=['naics', 'date'])
 
     # --> Price Target return
     _ = result[['date','eco zone', 'naics', 'pt_return']].groupby(['eco zone', 'date']).apply(group_in_quantile, 'pt_return',
@@ -372,13 +370,22 @@ def strategy_by_sector_for_eco_zone(eco_zone):
     # Return of Quantile by feature
     #
     ###################################################################################################################
-    print(monthly_prices.info())
 
-    portfolio = monthly_prices[['date', 'eco zone', 'naics', 'return', 'mc', 'historical_ranking_pt_return']]
+    portfolio = monthly_prices[['date', 'eco zone', 'naics', 'return', 'mc', 'ranking_ptvar', 'historical_ranking_ptvar']]
+    portfolio = portfolio[(portfolio['ranking_ptvar'].astype(int) > 9) & (portfolio['historical_ranking_ptvar'].astype(int) > 8)]
+
+    sector = np.load('isin_pf.npy')
+    sector = pd.DataFrame(sector, columns=['date', 'naics', 'isin', 'return', 'mc', 'historical_ranking_pt_return'])
+    sector['date'] = pd.DatetimeIndex(sector['date'])
+    portfolio = pd.merge(portfolio[['date', 'naics']], sector, on=['date', 'naics'])
+    portfolio = portfolio[['date', 'naics', 'isin', 'return', 'mc', 'historical_ranking_pt_return']]
     portfolio.columns = ['date', 'group', 'constituent', 'return', 'mc', 'signal']
-
-
     portfolio = portfolio[portfolio['signal'] == '10']
+    portfolio.loc[:, 'signal'] = 'buy'
+    stat = DisplaysheetStatistics(portfolio, 'Sector selection', Benchmark)
+    stat.plot_results()
+    return
+    portfolio.columns = ['date', 'group', 'constituent', 'return', 'mc', 'signal']
 
     portfolio.loc[:, 'signal'] = 'buy'
     stat = DisplaysheetStatistics(portfolio,'Sector selection', Benchmark)
@@ -406,24 +413,19 @@ def strategy_by_sector_for_eco_zone(eco_zone):
     return
 
 
-
 def strategy_by_stocks_in_eco_zone(eco_zone):
 
     my_path = Path(__file__).parent.parent.parent.parent.resolve()
-    monthly_prices = np.load(str(my_path) + '/bBlackFireCapitalData/SectorsMarketData/monthly_prices_adj.npy')
+    monthly_prices = np.load(str(my_path) + '/bBlackFireCapitalData/SectorsMarketData/monthly_prices_adj_us.npy')
     entete = ['eco zone', 'naics', 'gvkey', 'isin', 'exchg', 'USDtocurr', 'adj_factor', 'date',
                                        'pc', 'ph', 'pl', 'vol', 'curr', 'pt', 'npt', 'pptvar', 'npptvar', 'ptvar',
                                        'nptvar', 'rc', 'nrc', 'rcvar', 'nrcvar', 'csho', 'adj_pc', 'return',
                                        'pt_return']
 
     monthly_prices = pd.DataFrame(monthly_prices, columns=entete)
-    monthly_prices = monthly_prices[(monthly_prices['eco zone'] == eco_zone) &
-                                    (monthly_prices['naics'].isin(['312']))]
+    monthly_prices = monthly_prices[(monthly_prices['eco zone'] == eco_zone)]
     monthly_prices.loc[monthly_prices['pt_return'] == 0, 'pt_return'] = None
     print(monthly_prices.info())
-
-    # np.save('xx.npy', monthly_prices)
-
 
     # Filter all NAICS of level 2
     monthly_prices = monthly_prices[monthly_prices['naics'].isin(getSectorForLevel(2))]
@@ -431,7 +433,7 @@ def strategy_by_stocks_in_eco_zone(eco_zone):
     monthly_prices['date'] = pd.DatetimeIndex(monthly_prices['date'])
 
     # Calcul of Market Cap.
-    monthly_prices.loc[:, 'mc'] =  monthly_prices.loc[:, 'csho'] * monthly_prices.loc[:, 'pc'] / monthly_prices.loc[:, 'USDtocurr']
+    monthly_prices.loc[:, 'mc'] = monthly_prices.loc[:, 'csho'] * monthly_prices.loc[:, 'pc'] / monthly_prices.loc[:, 'USDtocurr']
     # monthly_prices = monthly_prices[monthly_prices['mc'] > 100000000]
 
     # Shift Stocks returns
@@ -460,7 +462,6 @@ def strategy_by_stocks_in_eco_zone(eco_zone):
                                                                                                      'pt_return',
                                                                                                      quantiles)
     monthly_prices = pd.merge(monthly_prices, result[['date', 'isin', 'ranking_pt_return']])
-
 
     # --> Mean variation of Price Target
     quantiles = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
@@ -492,22 +493,20 @@ def strategy_by_stocks_in_eco_zone(eco_zone):
     _.rename(columns={'ranking_pt_return': 'historical_ranking_pt_return'}, inplace=True)
     monthly_prices = pd.merge(monthly_prices, _[['date', 'isin', 'historical_ranking_pt_return']], on=['isin', 'date'])
 
-
     portfolio = monthly_prices[['date', 'naics', 'isin', 'return', 'mc', 'historical_ranking_pt_return']]
+    np.save('isin_pf.npy', portfolio)
     portfolio.columns = ['date', 'group', 'constituent', 'return', 'mc', 'signal']
 
-
+    return
     portfolio = portfolio[portfolio['signal'] == '10']
-
     portfolio.loc[:, 'signal'] = 'buy'
-    stat = DisplaysheetStatistics(portfolio,'Sector selection')
+    stat = DisplaysheetStatistics(portfolio, 'Sector selection')
     stat.plot_results()
-
 
 
 if __name__ == "__main__":
     # PlotData()
     # strategy_by_sector_for_eco_zone("USD")
-    strategy_by_stocks_in_eco_zone("USD")
-    # strategy_by_sector_for_eco_zone('USD')
+    # strategy_by_stocks_in_eco_zone("USD")
+    strategy_by_sector_for_eco_zone('USD')
     # strategy_wld()

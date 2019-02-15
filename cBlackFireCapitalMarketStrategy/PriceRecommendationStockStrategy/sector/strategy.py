@@ -245,6 +245,13 @@ def strategy_by_sector_for_eco_zone(eco_zone):
     monthly_prices = pd.DataFrame(monthly_prices, columns=entete)
     monthly_prices = monthly_prices[(monthly_prices['eco zone'] == eco_zone)]
 
+    data = dict()
+    data['header'] = entete
+    data['data'] = monthly_prices
+    np.save(str(my_path) + '/eBlackFireCapitalFiles/sectors_with_recommendations_signal.npy', data)
+
+
+    return
     monthly_prices.loc[monthly_prices['pt_return'] == 0, 'pt_return'] = None
     print(monthly_prices.info())
 
@@ -422,10 +429,16 @@ def strategy_by_stocks_in_eco_zone(eco_zone):
                                        'nptvar', 'rc', 'nrc', 'rcvar', 'nrcvar', 'csho', 'adj_pc', 'return',
                                        'pt_return']
 
+    ###################################################################################################################
+    #
+    # Initialisation of the data
+    #
+    ###################################################################################################################
+
     monthly_prices = pd.DataFrame(monthly_prices, columns=entete)
     monthly_prices = monthly_prices[(monthly_prices['eco zone'] == eco_zone)]
     monthly_prices.loc[monthly_prices['pt_return'] == 0, 'pt_return'] = None
-    print(monthly_prices.info())
+
 
     # Filter all NAICS of level 2
     monthly_prices = monthly_prices[monthly_prices['naics'].isin(getSectorForLevel(2))]
@@ -434,20 +447,19 @@ def strategy_by_stocks_in_eco_zone(eco_zone):
 
     # Calcul of Market Cap.
     monthly_prices.loc[:, 'mc'] = monthly_prices.loc[:, 'csho'] * monthly_prices.loc[:, 'pc'] / monthly_prices.loc[:, 'USDtocurr']
-    # monthly_prices = monthly_prices[monthly_prices['mc'] > 100000000]
 
     # Shift Stocks returns
     result = monthly_prices[['date', 'isin', 'pc', 'return']].groupby(['isin']).apply(shift_stocks_return, -1)
     monthly_prices['return'] = result['return']
 
-    # Calcul of BenchMark
-    # result = monthly_prices[['date', 'naics','pc', 'return', 'csho']].groupby(['naics', 'date']).apply(calculate_benchmark)
-    # result = result.reset_index().set_index('date').shift(periods=1, freq='M').reset_index()
-    # result.rename(columns={0: 'Benchmark'}, inplace=True)
-    # benchmark = result
-
     # Remove all None return
     monthly_prices.dropna(subset=['return'], inplace=True)
+    print(monthly_prices.info())
+    ###################################################################################################################
+    #
+    # Return of Quantile by feature
+    #
+    ###################################################################################################################
 
     # Ranking Stocks Returns
     quantiles = [0, 0.2, 0.8, 1]
@@ -463,23 +475,49 @@ def strategy_by_stocks_in_eco_zone(eco_zone):
                                                                                                      quantiles)
     monthly_prices = pd.merge(monthly_prices, result[['date', 'isin', 'ranking_pt_return']])
 
-    # --> Mean variation of Price Target
     quantiles = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
+
+    # --> Mean variation of Price Target
     result = monthly_prices[['date', 'naics', 'isin', 'ptvar']].groupby(['naics', 'date']).apply(group_in_quantile,
                                                                                                  'ptvar', quantiles)
     monthly_prices = pd.merge(monthly_prices, result[['date', 'isin', 'ranking_ptvar']])
 
+    # --> Mean variation of Primary Price Target
+    result = monthly_prices[['date', 'naics', 'isin', 'pptvar']].groupby(['naics', 'date']).apply(group_in_quantile,
+                                                                                                 'pptvar', quantiles)
+    monthly_prices = pd.merge(monthly_prices, result[['date', 'isin', 'ranking_pptvar']])
+
+    quantiles = [0, 0.2, 0.8,  1]
+
+    # --> Mean variation of Stocks recommendation
+    result = monthly_prices[['date', 'naics', 'isin', 'rc']].groupby(['naics', 'date']).apply(group_in_quantile,
+                                                                                                 'rc', quantiles)
+    monthly_prices = pd.merge(monthly_prices, result[['date', 'isin', 'ranking_rc']])
+
+    # --> Mean variation of Price Target
+    result = monthly_prices[['date', 'naics', 'isin', 'rcvar']].groupby(['naics', 'date']).apply(group_in_quantile,
+                                                                                                 'rcvar', quantiles)
+    monthly_prices = pd.merge(monthly_prices, result[['date', 'isin', 'ranking_rcvar']])
+
+    ###################################################################################################################
+    #
+    # Apply z-score for the historical growth
+    #
+    ###################################################################################################################
+
     # Calculation of 12 month z score for features ptvar, pt et rcvar
     result = monthly_prices.set_index('date')
 
-    result = result[['naics', 'isin', 'ptvar', 'pt_return']].groupby(['naics', 'isin']).rolling(12,
-                                                                                                min_periods=9).apply(
-        z_score)
+    result = result[['naics', 'isin', 'ptvar', 'pt_return', 'pptvar', 'rc', 'rcvar']]
+
+    result = result.groupby(['naics', 'isin']).rolling(12, min_periods=9).apply(z_score)
 
     result = result.reset_index()
     result = result[result['date'] > datetime(2000, 12, 1)]
 
     # Ranking of Naics z score by month
+
+    quantiles = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
 
     # --> Price Target Variation
     _ = result[['date', 'naics', 'isin', 'ptvar']].groupby(['naics', 'date']).apply(group_in_quantile, 'ptvar',
@@ -487,26 +525,113 @@ def strategy_by_stocks_in_eco_zone(eco_zone):
     _.rename(columns={'ranking_ptvar': 'historical_ranking_ptvar'}, inplace=True)
     monthly_prices = pd.merge(monthly_prices, _[['date', 'isin', 'historical_ranking_ptvar']], on=['isin', 'date'])
 
-    # --> Price Target returm
+    # --> Primary Price Target Variation
+    _ = result[['date', 'naics', 'isin', 'pptvar']].groupby(['naics', 'date']).apply(group_in_quantile, 'pptvar',
+                                                                                    quantiles)
+    _.rename(columns={'ranking_pptvar': 'historical_ranking_pptvar'}, inplace=True)
+    monthly_prices = pd.merge(monthly_prices, _[['date', 'isin', 'historical_ranking_pptvar']], on=['isin', 'date'])
+
+    # --> Price Target return
     _ = result[['date', 'naics', 'isin', 'pt_return']].groupby(['naics', 'date']).apply(group_in_quantile, 'pt_return',
                                                                                         quantiles)
     _.rename(columns={'ranking_pt_return': 'historical_ranking_pt_return'}, inplace=True)
     monthly_prices = pd.merge(monthly_prices, _[['date', 'isin', 'historical_ranking_pt_return']], on=['isin', 'date'])
 
-    portfolio = monthly_prices[['date', 'naics', 'isin', 'return', 'mc', 'historical_ranking_pt_return']]
-    np.save('isin_pf.npy', portfolio)
-    portfolio.columns = ['date', 'group', 'constituent', 'return', 'mc', 'signal']
+    quantiles = [0, 0.2, 0.8,  1]
+
+    # --> Price recommnedation
+    _ = result[['date', 'naics', 'isin', 'rc']].groupby(['naics', 'date']).apply(group_in_quantile, 'rc',
+                                                                                    quantiles)
+    _.rename(columns={'ranking_rc': 'historical_ranking_rc'}, inplace=True)
+    monthly_prices = pd.merge(monthly_prices, _[['date', 'isin', 'historical_ranking_rc']], on=['isin', 'date'])
+
+    # --> Price Stocks recommendation variation
+    _ = result[['date', 'naics', 'isin', 'rcvar']].groupby(['naics', 'date']).apply(group_in_quantile, 'rcvar',
+                                                                                    quantiles)
+    _.rename(columns={'ranking_rcvar': 'historical_ranking_rcvar'}, inplace=True)
+    monthly_prices = pd.merge(monthly_prices, _[['date', 'isin', 'historical_ranking_rcvar']], on=['isin', 'date'])
+
+    data = dict()
+    data['entete'] = monthly_prices.columns
+    data['data'] = monthly_prices
+
+    np.save(str(my_path) + '/eBlackFireCapitalFiles/stocks_with_recommendations_signal.npy', data)
+    # portfolio.columns = ['date', 'group', 'constituent', 'return', 'mc', 'signal']
 
     return
-    portfolio = portfolio[portfolio['signal'] == '10']
-    portfolio.loc[:, 'signal'] = 'buy'
-    stat = DisplaysheetStatistics(portfolio, 'Sector selection')
-    stat.plot_results()
+
+########################################################################################################################
+#                                                                                                                      #
+# Section 4: Result Statistics                                                                                         #
+#                                                                                                                      #
+########################################################################################################################
+
+def get_statistics_strategy_by_stocks_in_eco_zone(naics, data, benchmark,
+                                                  feature='historical_ranking_pt_return',
+                                                  strategy='l/s'):
+
+    mask_l = (data[feature] == '10') & \
+             (data['rc'].fillna(10).astype(int) < 3) & \
+             (data['ranking_ptvar'].fillna(0).astype(int) > 7) &\
+             (data['historical_ranking_ptvar'].fillna(0).astype(int) > 7)
+
+    mask_s = (data[feature] == '1') & \
+             (data['rc'].fillna(0).astype(int) > 3) & \
+             (data['ranking_ptvar'].fillna(0).astype(int).isin([1,2])) & \
+             (data['historical_ranking_ptvar'].fillna(0).astype(int).isin([1,2]))
+
+    # mask_l = (data['historical_ranking_ptvar'].fillna(0).astype(int) > 7)
+
+    # mask_s = data['historical_ranking_ptvar'].fillna(0).astype(int).isin([1,2])
+    if strategy == 'l':
+        portfolio = data[mask_l]
+    elif strategy == 's':
+        portfolio = data[mask_s]
+
+    else:
+        mask = mask_l | mask_s
+        portfolio = data[mask]
+
+    # portfolio = portfolio[portfolio['date'] > datetime(2008,12,1)]
+    portfolio = portfolio[['date', 'naics', 'isin', 'return', 'mc', feature]].set_index('date')
+    portfolio.columns = ['group', 'constituent', 'return', 'mc', 'position']
+    portfolio.loc[portfolio['position'] == '10', 'position'] = 'l'
+    portfolio.loc[portfolio['position'] == '9', 'position'] = 'l'
+    portfolio.loc[portfolio['position'] == '1', 'position'] = 's'
+    portfolio.loc[portfolio['position'] == '2', 'position'] = 's'
+    benchmark.rename(columns= {'return': 'benchmark'}, inplace=True)
+    description = 'The results shown above are obtained after buying stocks  with the best accelerations of the price ' \
+                  'target for the 12 previous month in the sector ' + naics + '. To rank stocks we calculate the Z-score' \
+                    ' of the mean price target returns.'
+    if portfolio.shape[0] > 0:
+        stat = DisplaysheetStatistics(portfolio,naics, description, benchmark[['date', 'benchmark']].set_index('date'))
+        stat.plot_results()
 
 
 if __name__ == "__main__":
     # PlotData()
     # strategy_by_sector_for_eco_zone("USD")
     # strategy_by_stocks_in_eco_zone("USD")
-    strategy_by_sector_for_eco_zone('USD')
+    # strategy_by_sector_for_eco_zone('USD')
     # strategy_wld()
+
+    my_path = Path(__file__).parent.parent.parent.parent.resolve()
+    data = np.load(str(my_path) + '/eBlackFireCapitalFiles/stocks_with_recommendations_signal.npy').item()
+    data = pd.DataFrame(data['data'], columns=data['entete'])
+
+    benchmark = np.load(str(my_path) + '/eBlackFireCapitalFiles/sectors_with_recommendations_signal.npy').item()
+    benchmark = pd.DataFrame(benchmark['data'], columns=benchmark['header'])
+
+    get_statistics_strategy_by_stocks_in_eco_zone('ALL',
+                                                  data,
+                                                  benchmark[benchmark['naics'].astype(str)  == '111'])
+    # for naics in data['naics'].unique():
+    #
+    #     print(naics)
+    #     get_statistics_strategy_by_stocks_in_eco_zone(naics,
+    #                                                   data[data['naics'].astype(str) == naics],
+    #                                                   benchmark[benchmark['naics'].astype(str)  == naics]
+    #                                                   )
+
+
+

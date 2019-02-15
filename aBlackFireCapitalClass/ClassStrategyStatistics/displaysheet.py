@@ -5,6 +5,8 @@ import matplotlib.dates as mdates
 import seaborn as sns
 from matplotlib.ticker import FuncFormatter
 from matplotlib import cm
+from textwrap import wrap
+
 from datetime import datetime
 import pandas as pd
 
@@ -18,12 +20,13 @@ class DisplaysheetStatistics:
 	Displays a one pager including some basics statistics for the portfolio strategy.
 	"""
 
-    def __init__(self, portfolio, title, benchmark=None, rolling_periods=12, rolling_sharpe=True):
+    def __init__(self, portfolio, title, description, benchmark=None, rolling_periods=12, rolling_sharpe=True):
 
-        self.portfolio = portfolio
-        self.benchmark = benchmark
+        self.portfolio = portfolio.sort_index()
+        self.benchmark = benchmark.sort_index()
         self.rolling_periods = rolling_periods
         self.title = title
+        self.description = description
         self.rolling_sharpe = rolling_sharpe
 
     def get_results(self):
@@ -33,19 +36,26 @@ class DisplaysheetStatistics:
 		:return:
 		"""
         portfolio = self.portfolio
+
+        portfolio = portfolio
         stats = dict()
+
         my_path = Path(__file__).parent.parent.parent.resolve()
         us_bonds = np.load(str(my_path) + '/eBlackFireCapitalFiles/monthly_us_bonds_prices.npy')
         us_bonds = pd.DataFrame(us_bonds, columns=['date', 'bonds'])
         us_bonds['date'] = pd.DatetimeIndex(us_bonds['date'])
         us_bonds.set_index('date', inplace=True)
         us_bonds.sort_index(inplace=True)
+
         # PortFolio Constituents Turnover
         stats['turnover'] = cstat.turnover(portfolio)[0]
 
         # Strategy Monthly returns
         stats['return'] = cstat.strategy_returns(portfolio)
+
         portfolio = pd.merge(stats['return'], us_bonds, left_index=True, right_index=True)
+        portfolio = portfolio.astype(float)
+
         # Strategy Cumulative returns
         stats['price'] = cstat.cum_returns(stats['return'], 'back test')
 
@@ -69,6 +79,7 @@ class DisplaysheetStatistics:
 
         if self.benchmark is not None:
             portfolio = pd.merge(portfolio, self.benchmark, left_index=True, right_index=True)
+            portfolio = portfolio.astype(float)
             stats['beta'] = cstat.strategy_beta(portfolio)
             stats['return_b'] = portfolio[['benchmark']]
             stats['price_b'] = cstat.cum_returns(portfolio[['benchmark']], 'benchmark', of='benchmark')
@@ -92,9 +103,45 @@ class DisplaysheetStatistics:
             alpha = cstat.create_alpha(
                 portfolio[['return', 'benchmark', 'bonds']], stats['beta']
             )
-            print(alpha)
+            stats['alpha'] = alpha
 
         return stats
+
+    def _plot_strategy_description(self, ax=None, **kwargs):
+
+        def format_perc(x, pos):
+            return '%.0f%%' % x
+
+        if ax is None:
+            ax = plt.gca()
+
+        y_axis_formatter = FuncFormatter(format_perc)
+        ax.yaxis.set_major_formatter(FuncFormatter(y_axis_formatter))
+
+
+        # ax.text(9.5, 6.9, self.description, fontsize=8, fontweight='bold',
+        #         color='grey', horizontalalignment='right')
+        # build a rectangle in axes coords
+        left, width = .25, .5
+        bottom, height = .25, .5
+        right = left + width
+        top = bottom + height
+        ax.text(0.5*(left+right), 0.5*(bottom+top), "\n".join(wrap(self.description)),
+                horizontalalignment='center',
+                verticalalignment='center',
+                fontsize=8, color='black')
+        ax.grid(False)
+        ax.set_title('Description', fontweight='bold')
+        ax.spines['top'].set_linewidth(2.0)
+        ax.spines['bottom'].set_linewidth(2.0)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_visible(False)
+        ax.get_yaxis().set_visible(False)
+        ax.get_xaxis().set_visible(False)
+        ax.set_ylabel('')
+        ax.set_xlabel('')
+        # ax.axis([0, 10, 0, 12])
+        return ax
 
     def _plot_equity(self, stats, ax=None, **kwargs):
 
@@ -288,39 +335,40 @@ class DisplaysheetStatistics:
         rsq = cstat.rsquared(range(cum_returns.shape[0]), cum_returns)
         dd, dd_max, dd_dur = cstat.create_drawdowns(cum_returns)
 
-        ax.text(0.25, 9.9, 'Total Return', fontsize=8)
-        ax.text(7.50, 9.9, '{:.0%}'.format(tot_ret), fontweight='bold', horizontalalignment='right', fontsize=8)
+        ax.text(0.25, 10.9, 'Total Return', fontsize=8)
+        ax.text(7.50, 10.9, '{:.0%}'.format(tot_ret), fontweight='bold', horizontalalignment='right', fontsize=8)
 
-        ax.text(0.25, 8.9, 'CAGR', fontsize=8)
-        ax.text(7.50, 8.9, '{:.2%}'.format(cagr), fontweight='bold', horizontalalignment='right', fontsize=8)
+        ax.text(0.25, 9.9, 'CAGR', fontsize=8)
+        ax.text(7.50, 9.9, '{:.2%}'.format(cagr), fontweight='bold', horizontalalignment='right', fontsize=8)
 
-        ax.text(0.25, 7.9, 'Sharpe Ratio', fontsize=8)
-        ax.text(7.50, 7.9, '{:.2f}'.format(sharpe), fontweight='bold', horizontalalignment='right', fontsize=8)
+        ax.text(0.25, 8.9, 'Sharpe Ratio', fontsize=8)
+        ax.text(7.50, 8.9, '{:.2f}'.format(sharpe), fontweight='bold', horizontalalignment='right', fontsize=8)
 
-        ax.text(0.25, 6.9, 'Sortino Ratio', fontsize=8)
-        ax.text(7.50, 6.9, '{:.2f}'.format(sortino), fontweight='bold', horizontalalignment='right', fontsize=8)
+        ax.text(0.25, 7.9, 'Sortino Ratio', fontsize=8)
+        ax.text(7.50, 7.9, '{:.2f}'.format(sortino), fontweight='bold', horizontalalignment='right', fontsize=8)
 
-        ax.text(0.25, 5.9, 'Annual Volatility', fontsize=8)
-        ax.text(7.50, 5.9, '{:.2%}'.format((returns.std() * np.sqrt(self.rolling_periods)).values[0]),
+        ax.text(0.25, 6.9, 'Annual Volatility', fontsize=8)
+        ax.text(7.50, 6.9, '{:.2%}'.format((returns.std() * np.sqrt(self.rolling_periods)).values[0]),
                 fontweight='bold', horizontalalignment='right', fontsize=8)
 
-        ax.text(0.25, 4.9, 'R-Squared', fontsize=8)
-        ax.text(7.50, 4.9, '{:.2f}'.format(rsq), fontweight='bold', horizontalalignment='right', fontsize=8)
+        ax.text(0.25, 5.9, 'R-Squared', fontsize=8)
+        ax.text(7.50, 5.9, '{:.2f}'.format(rsq), fontweight='bold', horizontalalignment='right', fontsize=8)
 
-        ax.text(0.25, 3.9, 'Max Monthly Drawdown', fontsize=8)
-        ax.text(7.50, 3.9, '{:.2%}'.format(dd_max), color='red', fontweight='bold', horizontalalignment='right',
+        ax.text(0.25, 4.9, 'Max Monthly Drawdown', fontsize=8)
+        ax.text(7.50, 4.9, '{:.2%}'.format(dd_max), color='red', fontweight='bold', horizontalalignment='right',
                 fontsize=8)
 
-        ax.text(0.25, 2.9, 'Max Drawdown Duration', fontsize=8)
-        ax.text(7.50, 2.9, '{:.0f}'.format(dd_dur), fontweight='bold', horizontalalignment='right', fontsize=8)
+        ax.text(0.25, 3.9, 'Max Drawdown Duration', fontsize=8)
+        ax.text(7.50, 3.9, '{:.0f}'.format(dd_dur), fontweight='bold', horizontalalignment='right', fontsize=8)
 
-        ax.text(0.25, 1.9, 'Mean Monthly Stocks Turnover', fontsize=8)
-        ax.text(9.75, 1.9, '{:.2f}'.format(stats['turnover']), fontweight='bold', horizontalalignment='right',
+        ax.text(0.25, 2.9, 'Mean Monthly Stocks Turnover', fontsize=8)
+        ax.text(9.75, 2.9, '{:.2f}'.format(stats['turnover']), fontweight='bold', horizontalalignment='right',
                 fontsize=8)
 
         # ax.text(0.25, 0.9, 'Trades per Year', fontsize=8)
         # ax.text(7.50, 0.9, '{:.1f}'.format(trd_yr), fontweight='bold', horizontalalignment='right', fontsize=8)
         # ax.set_title('Curve', fontweight='bold')
+        ax.set_title('Curve', fontweight='bold')
 
         if self.benchmark is not None:
             returns_b = stats['return_b']
@@ -333,20 +381,22 @@ class DisplaysheetStatistics:
             dd_b, dd_max_b, dd_dur_b = cstat.create_drawdowns(equity_b)
             beta = stats['beta']
 
-            ax.text(9.75, 9.9, '{:.0%}'.format(tot_ret_b), fontweight='bold', horizontalalignment='right', fontsize=8)
-            ax.text(9.75, 8.9, '{:.2%}'.format(cagr_b), fontweight='bold', horizontalalignment='right', fontsize=8)
-            ax.text(9.75, 7.9, '{:.2f}'.format(sharpe_b), fontweight='bold', horizontalalignment='right', fontsize=8)
-            ax.text(9.75, 6.9, '{:.2f}'.format(sortino_b), fontweight='bold', horizontalalignment='right', fontsize=8)
-            ax.text(9.75, 5.9, '{:.2%}'.format((returns_b.std() * np.sqrt(self.rolling_periods)).values[0]),
+            ax.text(9.75, 10.9, '{:.0%}'.format(tot_ret_b), fontweight='bold', horizontalalignment='right', fontsize=8)
+            ax.text(9.75, 9.9, '{:.2%}'.format(cagr_b), fontweight='bold', horizontalalignment='right', fontsize=8)
+            ax.text(9.75, 8.9, '{:.2f}'.format(sharpe_b), fontweight='bold', horizontalalignment='right', fontsize=8)
+            ax.text(9.75, 7.9, '{:.2f}'.format(sortino_b), fontweight='bold', horizontalalignment='right', fontsize=8)
+            ax.text(9.75, 6.9, '{:.2%}'.format((returns_b.std() * np.sqrt(self.rolling_periods)).values[0]),
                     fontweight='bold', horizontalalignment='right', fontsize=8)
-            ax.text(9.75, 4.9, '{:.2f}'.format(rsq_b), fontweight='bold', horizontalalignment='right', fontsize=8)
-            ax.text(9.75, 3.9, '{:.2%}'.format(dd_max_b), color='red', fontweight='bold', horizontalalignment='right',
+            ax.text(9.75, 5.9, '{:.2f}'.format(rsq_b), fontweight='bold', horizontalalignment='right', fontsize=8)
+            ax.text(9.75, 4.9, '{:.2%}'.format(dd_max_b), color='red', fontweight='bold', horizontalalignment='right',
                     fontsize=8)
-            ax.text(9.75, 2.9, '{:.0f}'.format(dd_dur_b), fontweight='bold', horizontalalignment='right', fontsize=8)
+            ax.text(9.75, 3.9, '{:.0f}'.format(dd_dur_b), fontweight='bold', horizontalalignment='right', fontsize=8)
+
+            ax.text(0.25, 1.9, 'Beta', fontsize=8)
+            ax.text(7.50, 1.9, '{:.1f}'.format(beta), fontweight='bold', horizontalalignment='right', fontsize=8)
 
             ax.text(0.25, 0.9, 'Beta', fontsize=8)
-            ax.text(7.50, 0.9, '{:.1f}'.format(beta), fontweight='bold', horizontalalignment='right', fontsize=8)
-            ax.set_title('Curve', fontweight='bold')
+            ax.text(7.50, 0.9, '{:.2f} %'.format(100 * stats['alpha']), fontweight='bold', horizontalalignment='right', fontsize=8)
             ax.set_title('Curve vs. Benchmark', fontweight='bold')
 
         ax.grid(False)
@@ -359,7 +409,7 @@ class DisplaysheetStatistics:
         ax.set_ylabel('')
         ax.set_xlabel('')
 
-        ax.axis([0, 10, 0, 11])
+        ax.axis([0, 10, 0, 12])
         return ax
 
     def _plot_txt_trade(self, stats, ax=None, **kwargs):
@@ -555,21 +605,23 @@ class DisplaysheetStatistics:
             offset_index = 0
 
         vertical_sections = 7 + offset_index
-        fig = plt.figure(figsize=(30, vertical_sections * 7))
+        fig = plt.figure(figsize=(15, vertical_sections * 4))
         fig.suptitle(self.title, y=0.94, weight='bold')
         gs = gridspec.GridSpec(vertical_sections, 3, wspace=0.25, hspace=0.5)
 
         stats = self.get_results()
-        ax_equity = plt.subplot(gs[:2, :])
+        ax_description = plt.subplot(gs[:1, :])
+        ax_equity = plt.subplot(gs[1:3, :])
         if self.rolling_sharpe:
-            ax_sharpe = plt.subplot(gs[2, :])
-        ax_drawdown = plt.subplot(gs[2 + offset_index, :])
-        ax_monthly_returns = plt.subplot(gs[3 + offset_index: 5 + offset_index, :2])
-        ax_yearly_returns = plt.subplot(gs[3 + offset_index: 5 + offset_index, 2])
-        ax_txt_curve = plt.subplot(gs[5 + offset_index: 7 + offset_index, 0])
-        ax_txt_trade = plt.subplot(gs[5 + offset_index: 7 + offset_index, 1])
-        ax_txt_time = plt.subplot(gs[5 + offset_index: 7 + offset_index, 2])
+            ax_sharpe = plt.subplot(gs[3, :])
+        ax_drawdown = plt.subplot(gs[3 + offset_index, :])
+        ax_monthly_returns = plt.subplot(gs[4 + offset_index: 6 + offset_index, :2])
+        ax_yearly_returns = plt.subplot(gs[4 + offset_index: 6 + offset_index, 2])
+        ax_txt_curve = plt.subplot(gs[6 + offset_index:, 0])
+        ax_txt_trade = plt.subplot(gs[6 + offset_index:, 1])
+        ax_txt_time = plt.subplot(gs[6 + offset_index: , 2])
 
+        self._plot_strategy_description(ax=ax_description)
         self._plot_equity(stats, ax=ax_equity)
         if self.rolling_sharpe:
             self._plot_rolling_sharpe(stats, ax=ax_sharpe)
@@ -581,4 +633,7 @@ class DisplaysheetStatistics:
         self._plot_txt_time(stats, ax=ax_txt_time)
 
         # Plot the figure
-        plt.show()
+        # fig = plt.gcf()
+        fig.set_size_inches(15, 20)
+        fig.savefig(self.title + '.png', dpi=500)
+        # plt.show()

@@ -67,7 +67,10 @@ def create_sharpe_ratio(returns, periods=252):
 	"""
 
     def calculate_sharpe_ratio(rolling):
-        return ((rolling['return'] - rolling['bonds']).mean())/rolling['return'].std()
+        try:
+            return ((rolling['return'] - rolling['bonds']).mean())/rolling['return'].std()
+        except:
+            return None
 
     tab = returns[['bonds']]/100
     # Annualised PF returns
@@ -134,17 +137,15 @@ def rsquared(x, y):
 def turnover(returns):
     t = returns.groupby('date')['constituent'].apply(lambda x: set(x.values.tolist()))
     t = t.combine(t.shift(), lambda a, b: len(b - a) / len(b) if isinstance(b, set) else np.nan).dropna()
-
-    print(returns['constituent'].groupby(returns['date']).count().count())
-    print(returns.shape)
+    print(returns.groupby('date')['constituent'].count())
     return t.mean(), t
 
 
 def strategy_returns(portfolio, methods='market_cap_weighted'):
+
     def calculate_return(group):
         return (group['weight'] * group['return']).sum() / group['weight'].sum()
 
-    # TODO: Implement Sell Strategy:
 
     if methods == 'market_cap_weighted':
         portfolio.loc[:, 'weight'] = portfolio.loc[:, 'mc']
@@ -153,16 +154,22 @@ def strategy_returns(portfolio, methods='market_cap_weighted'):
     else:
         raise ValueError("methods must be market_cap_weighted or equal_weighted")
 
-    returns = portfolio[['constituent', 'weight', 'signal', 'return']].groupby(portfolio['date']).apply(
+    portfolio.loc[portfolio['position'] == 's', 'return'] = - 1 * portfolio.loc[portfolio['position'] == 's', 'return']
+    returns = portfolio[['constituent', 'weight', 'position', 'return']].groupby(portfolio.index).apply(
         calculate_return)
 
-    return pd.DataFrame(returns, columns=['return']).shift(1, 'M')
+    # Shift for one month to get the actuals returns for the month, resample to add the missing month in case of no trades
+    t = pd.DataFrame(returns, columns=['return']).shift(1, 'M').resample('1M').fillna(method='bfill', limit=1).fillna(0)
+    t.index = t.index + pd.DateOffset(hours=16, minute=0, second=0)
+
+    return t
 
 
 def strategy_beta(portfolio):
-    beta = portfolio[['return', 'benchmark']].cov() / portfolio['benchmark'].var()
 
-    return beta.loc['return', 'benchmark']
+    beta = portfolio['return'].cov(portfolio['benchmark'])/ portfolio['benchmark'].var()
+    return beta
+    # return beta.loc['return', 'benchmark']
 
 
 def cum_returns(portfolio, name, of='return'):

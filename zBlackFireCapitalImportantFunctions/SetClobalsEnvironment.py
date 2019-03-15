@@ -22,8 +22,8 @@ from aBlackFireCapitalClass.ClassStocksMarketData.ClassStocksMarketDataInfos imp
 # from bBlackFireCapitalData.StocksMarketData.StocksPriceData.GetStocksPriceDataFromWRDS import GetStocksPriceData
 # from bBlackFireCapitalData.StocksMarketData.StocksPriceRecommendationData.GetStocksInfosRecommendations import \
 #     SetStocksInfosRecommendationsInDB
-# from bBlackFireCapitalData.StocksMarketData.StocksPriceRecommendationData.GetStocksPriceRecommendations import \
-#     GetStocksPriceRecommendations
+# from bBlackFireCapitalData.StocksMarketData.StocksPriceRecommendationData.get_stocks_price_recommendations import \
+#     get_stocks_price_recommendations
 from zBlackFireCapitalImportantFunctions.ConnectionString import TestConnectionString, ProdConnectionString
 # from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import GenerateMonthlyTab, principal_processor, \
 #     type_consensus, type_price_target, SetBackupOfDataBase, RestoreBackupOfdataBase, \
@@ -209,7 +209,7 @@ if __name__ == '__main__':
     #                                       type= type_price_target,
     #                                       connectionstring=ProdConnectionString),
     # pool = MyPool(2)
-    # result = pool.map(GetStocksPriceRecommendations, pt)
+    # result = pool.map(get_stocks_price_recommendations, pt)
     # pool.close()
     # pool.join()
     # print(result)
@@ -230,7 +230,7 @@ if __name__ == '__main__':
     #                                       type= type_consensus,
     #                                       connectionstring=ProdConnectionString),
     # pool = MyPool(2)
-    # result = pool.map(GetStocksPriceRecommendations, pt)
+    # result = pool.map(get_stocks_price_recommendations, pt)
     # pool.close()
     # pool.join()
     # print(result)

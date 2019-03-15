@@ -7,7 +7,10 @@ from pymongo import InsertOne, UpdateOne
 __author__ = 'pougomg'
 import wrds
 import numpy as np
+from pathlib import Path
 
+my_path = Path(__file__).parent.parent.parent.parent.resolve()
+my_path = str(my_path) + '/eBlackFireCapitalFiles/'
 
 def get_stocks_info_data_dict(parameter: collections) -> dict:
     """
@@ -117,7 +120,7 @@ def get_stocks_info_data_dict(parameter: collections) -> dict:
     return parameter.table, 'Completed'
 
 
-def set_stocks_infos_data_in_db(connection_string):
+def set_stocks_infos_data_in_db(connection_string: str):
 
     client_db = motor.motor_tornado.MotorClient(connection_string)
     d_info = np.load('dict_info.npy').item()
@@ -129,7 +132,7 @@ def set_stocks_infos_data_in_db(connection_string):
     client_db.close()
 
 
-def get_stocks_infos_from_db(connection_string):
+def get_stocks_infos_from_db(connection_string: str):
 
     client_db = motor.motor_tornado.MotorClient(connection_string)
     tab = tornado.ioloop.IOLoop.current().run_sync(StocksMarketDataInfos(client_db, {}, None).GetDataFromDB)
@@ -141,15 +144,37 @@ def get_stocks_infos_from_db(connection_string):
         gvkey = value['_id']
         eco = value['eco zone']
         naics = value['naics']
-
         ident = value['stock identification']
+
         for v in ident:
+
             result.append([gvkey, eco, naics, v['isin'], v['ibtic'], v['cusip_8'], v['exhg']])
             result.append([gvkey, eco, naics, v['cusip'], v['ibtic'], v['cusip_8'], v['exhg']])
 
+    di = dict()
+    di['description'] = 'Ce dictionnaire comprend '
+    di['header'] = ['gvkey', 'eco zone', 'naics', 'isin_or_cusip', 'ibtic', 'cusip_8', 'exhg']
+    di['data'] = result
+
+    np.save(my_path + 'stocks_price_infos.npy', di)
+
+
     np.save('StocksPricesInfos', result)
 
+if __name__ == '__main__':
 
-if __name__ == 'main':
+    data = np.load(my_path + 'stocks_price_infos.npy').item()
+
+    # di = dict()
+    # di['description'] = 'Ce dictionnaire comprend toutes les informations des stocks en base de donnees'
+    # di['header'] = ['gvkey', 'eco zone', 'naics', 'isin_or_cusip', 'ibtic', 'cusip_8', 'exhg']
+    # di['data'] = data['data']
+    #
+    # np.save(my_path + 'stocks_price_infos.npy', di)
+
+    # print(my_path)
+
+
+
 
 

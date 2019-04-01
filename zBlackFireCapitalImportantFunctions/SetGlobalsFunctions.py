@@ -1,13 +1,9 @@
 from datetime import datetime, timedelta
 import cProfile, pstats, io
-import pymongo
 import pandas as pd
 import numpy as np
-from mongobackup import backup, restore
 import calendar
 
-#ClientDB['admin'].add_user("GhislainPougomNoubissie", "BlackFireCapitalIncFromBottomToTheTop")
-#ClientDB['admin'].command("createUser", "GhislainPougomNoubissie", pwd="BlackFireCapitalIncFromBottomToTheTop", roles=["root"])
 
 principal_processor = 16
 secondary_processor = 5
@@ -16,8 +12,31 @@ type_price_target = 'price_target'
 CurrenciesExchangeRatesDBName = 'currency'
 StocksMarketDataInfosDBName = 'stocks_infos'
 
+PRINCIPAL_PROCESSOR = 16
+SECONDARY_PROCESSOR = 5
 
-country_zone_and_exchg = [['canada','CAN','CAD','7'], ['united states','USA','USD','11','12','14','17'],
+TYPE_CONSENSUS = 'consensus'
+TYPE_PRICE_TARGET = 'price_target'
+
+CURRENCIES_EXCHANGE_RATES_DB_NAME = 'currency'
+CURRENCIES_EXCHANGE_RATES_DB_COL_NAME = 'exchg_rates'
+
+STOCKS_MARKET_DATA_DB_NAME = 'stocks'
+STOCKS_MARKET_DATA_INFO_DB_COL_NAME = 'stocks_infos'
+SUMMARY_DB_COL_NAME = 'summary'
+M_SUMMARY_DB_COL_NAME = 'm_summary'
+STOCKS_MARKET_FORECASTS_INFO_DB_COL_NAME = 'forecast_info'
+
+SECTORS_MARKET_DATA_DB_NAME = 'sector'
+NAICS = 'naics'
+SECTORS_MARKET_DATA_INFO_DB_COL_NAME = 'info'
+SECTORS_MARKET_DATA_MAPPING_DB_COL_NAME = 'mapping'
+
+ECONOMICS_ZONES_DB_NAME = 'economics_zones'
+ECONOMICS_ZONES_DB_COL_NAME = 'infos'
+
+
+COUNTRY_ZONE_AND_EXCHG = [['canada','CAN','CAD','7'], ['united states','USA','USD','11','12','14','17'],
            ['austria', 'AUT', 'EUR', '150', '273'],
            ['belgium','BEL', 'EUR', '132', '150', '161', '188', '285', '294'],
            ['denmark', 'DNK', 'DKK', '305', '144'],
@@ -63,7 +82,6 @@ country_zone_and_exchg = [['canada','CAN','CAD','7'], ['united states','USA','US
            ['philippines', 'PHL', 'PHP', '202' ,'203'],
            ['taiwan', 'TWN', 'TWD', '245', '260', '303'],
            ['thailand', 'THA', 'THB', '110']]
-jeanne = '514-951-4019'
 
 
 def GenerateMonthlyTab(start_date, end_date):
@@ -318,7 +336,6 @@ def SetBackupOfDataBase(description):
     backup("GhislainPougomNoubissie", "BlackFireCapitalIncFromBottomToTheTop", "/var/backups/mongo/",
            attached_directory_path="/home/pougomg/Bureau/BlackFireCapitalBackup/",custom_prefix=description,
            silent=True)
-
 
 
 def RestoreBackupOfdataBase(fileName):

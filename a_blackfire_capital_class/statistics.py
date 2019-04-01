@@ -6,7 +6,9 @@ import numpy as np
 import pandas as pd
 from scipy.stats import linregress
 
+
 def roll(df, w, **kwargs):
+
     roll_array = np.dstack([df.values[i:i+w, :] for i in range(len(df.index) - w + 1)]).T
     panel = pd.Panel(roll_array,
                      items=df.index[w-1:],
@@ -16,6 +18,7 @@ def roll(df, w, **kwargs):
 
 
 def aggregate_returns(returns, convert_to):
+
     """
 	Aggregates returns by day, week, month, or year.
 	"""

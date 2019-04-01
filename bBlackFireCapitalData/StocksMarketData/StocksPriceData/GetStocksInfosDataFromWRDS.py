@@ -150,6 +150,4 @@ def get_stocks_infos_from_db(connection_string):
     np.save('StocksPricesInfos', result)
 
 
-if __name__ == 'main':
-
 

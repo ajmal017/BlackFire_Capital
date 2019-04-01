@@ -1,14 +1,13 @@
-from aBlackFireCapitalClass.ClassStrategyStatistics.displaysheet import DisplaysheetStatistics
+from a_blackfire_capital_class.displaysheet import DisplaysheetStatistics
 from bBlackFireCapitalData.SectorsMarketData.GetSectorsMarketInfos import getSectorForLevel
-from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import profile
 import motor
 import tornado
 import numpy as np
 import pandas as pd
 from datetime import datetime
-from sklearn import tree, metrics, svm, ensemble
+from sklearn import metrics
 from pathlib import Path
-from sklearn.cross_validation import cross_val_score, KFold, train_test_split
+from sklearn.cross_validation import cross_val_score, KFold
 from scipy.stats import sem
 import matplotlib.pyplot as plt
 from aBlackFireCapitalClass.ClassSectorsMarketData.ClassSectorsMarketDataPrice import SectorsMarketDataPrice

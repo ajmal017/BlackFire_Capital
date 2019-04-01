@@ -1,4 +1,4 @@
-from aBlackFireCapitalClass.ClassStrategyStatistics import statistics as cstat
+from a_blackfire_capital_class import statistics as cstat
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import matplotlib.dates as mdates
@@ -7,13 +7,12 @@ from matplotlib.ticker import FuncFormatter
 from matplotlib import cm
 from textwrap import wrap
 
-from datetime import datetime
 import pandas as pd
 
 __author__ = 'pougomg'
 import numpy as np
 from pathlib import Path
-from datetime import  datetime
+
 
 class DisplaysheetStatistics:
     """

@@ -1,9 +1,0 @@
- 
-                                                                                                                                                                                                                                                                
- 
-gvkey  iid datadate ggroup gind   gsector loc naics  sic  isin         sedol    exchg secstat             ajexdi              cshoc             cshtrd curcdd fic              prccd              prchd              prcld prcstd              split
-
-206077 01W 20181017  2020  202010   20    JPN 337    2590 JP3200600009 6658481    213    A                 .                  .                  .            JPN              .                  .                  .          .              .    
-221612 01W 20181018  5010  501010   50    NOR 517210 4812 NO0010063308 4732495    228    A                 .                  .                  .            NOR              .                  .                  .          .              .    
-224256 01W 20181017  2010  201030   20    JPN 541330 8711 JP3238100006 6129125    264    A                 .                  .                  .            JPN              .                  .                  .          .              .    
-292777 01W 20181018  4520  452010   45    HKG 5415   7370 KYG211341048 B41LDR7    170    A                 .                  .                  .            CYM              .                  .                  .          .              .    

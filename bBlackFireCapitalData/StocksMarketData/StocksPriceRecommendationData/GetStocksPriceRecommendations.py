@@ -31,7 +31,7 @@ entete = ['anndats', 'curr', 'exrat']
 exrate = np.load('exrates.npy')
 exrate = pd.DataFrame(exrate,columns=entete)
 
-exr = exrate[(exrate['anndats'].isin([datetime.date(2018,4,11) - datetime.timedelta(days=i) for i in range(1,6)]))
+exr = exrate[(exrate['anndats'].isin([datetime.date(2018, 4, 11) - datetime.timedelta(days=i) for i in range(1,6)]))
           & (exrate['curr'] == 'ZWK')].sort_values('anndats', ascending=False).reset_index()
 print(exr['exrat'])
 print(exr['exrat'][0])
@@ -130,7 +130,7 @@ def GetStocksPriceRecommendations(params):
                     'LEFT JOIN ibes.hdxrati B ON (pt.anndats = B.anndats AND pt.estcur = B.curr) '
 
     if params.type == type_consensus:
-        entete = ['ticker', 'cusip','emaskcd', 'ireccd', 'anndats', 'amaskcd']
+        entete = ['ticker', 'cusip', 'emaskcd', 'ireccd', 'anndats', 'amaskcd']
 
         sqlstmt = 'select ' + ','.join(entete) + ' From {schema}.{table} '.format(
             schema='ibes',
@@ -224,7 +224,7 @@ def CalculateRecommendationVar(params):
     v = np.vectorize(convertDateToString)
     res['date'] = v(res['anndats'])
 
-    res = res.sort_values(["gvkey","cusip", "amaskcd","date"], ascending=[True, True, False,False])
+    res = res.sort_values(["gvkey", "cusip", "amaskcd", "date"], ascending=[True, True, False,False])
     res = res.iloc[:].reset_index(drop=True)
     res_p = res.iloc[1:, indice_for_var].reset_index(drop=True)
     res = res.iloc[:-1]

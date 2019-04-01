@@ -13,6 +13,8 @@ import numpy as np
 import pandas as pd
 from pymongo import InsertOne
 import collections
+from pathlib import Path
+from pandas.tseries.offsets import MonthEnd
 from zBlackFireCapitalImportantFunctions.ConnectionString import TestConnectionString, ProdConnectionString
 from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import profile
 from aBlackFireCapitalClass.ClassPriceRecommendationData.ClassPriceRecommendationDataValues import \
@@ -31,10 +33,13 @@ entete = ['anndats', 'curr', 'exrat']
 exrate = np.load('exrates.npy')
 exrate = pd.DataFrame(exrate,columns=entete)
 
-exr = exrate[(exrate['anndats'].isin([datetime.date(2018, 4, 11) - datetime.timedelta(days=i) for i in range(1,6)]))
+exr = exrate[(exrate['anndats'].isin([datetime.date(2018,4,11) - datetime.timedelta(days=i) for i in range(1,6)]))
           & (exrate['curr'] == 'ZWK')].sort_values('anndats', ascending=False).reset_index()
 print(exr['exrat'])
 print(exr['exrat'][0])
+
+my_path = Path(__file__).parent.parent.parent.parent.resolve()
+my_path = str(my_path) + '/eBlackFireCapitalFiles/'
 
 def convertDateToString(date):
     return date.strftime('%Y-%m')
@@ -119,19 +124,22 @@ def BulkSetPriceTargetData(gvkey, ticker, cusip, amaskcd, emaskcd, anndats, curr
 
 
 @profile
-def GetStocksPriceRecommendations(params):
+def get_stocks_price_recommendations(params: collections):
+
+    """
+    This function is used to download the Price Target and the recommendations of the analyst.
+    :param: params.type: type_price_target and price_consensus.
+    """
 
     if params.type == type_price_target:
 
-        entete = ['ticker', 'cusip', 'estimid', 'horizon', 'value',
-                  'estcur', 'anndats', 'amaskcd']
+        entete = ['ticker', 'cusip', 'estimid', 'horizon', 'value', 'estcur', 'anndats', 'amaskcd']
         sqlstmt = 'select pt.*, B.exrat FROM(select ' + ','.join(entete) + ' FROM {schema}.{table}  ' \
                     .format(schema='ibes', table='ptgdet',) +' ) As pt ' \
                     'LEFT JOIN ibes.hdxrati B ON (pt.anndats = B.anndats AND pt.estcur = B.curr) '
 
     if params.type == type_consensus:
-        entete = ['ticker', 'cusip', 'emaskcd', 'ireccd', 'anndats', 'amaskcd']
-
+        entete = ['ticker', 'cusip','emaskcd', 'ireccd', 'anndats', 'amaskcd']
         sqlstmt = 'select ' + ','.join(entete) + ' From {schema}.{table} '.format(
             schema='ibes',
             table='recddet',
@@ -141,7 +149,12 @@ def GetStocksPriceRecommendations(params):
         db = wrds.Connection()
         res = db.raw_sql(sqlstmt)
         db.close()
-        np.save(params.type + '_data', res)
+
+        di =dict()
+        di['header'] = res.columns
+        di['description'] = 'Ce dictionnaire contient les donnees de previsions des analystes'
+        di['data'] = res
+        np.save(my_path + params.type + '_data', di)
 
     except exc.SQLAlchemyError as e:
         print(e)
@@ -149,10 +162,30 @@ def GetStocksPriceRecommendations(params):
     finally:
         db.close()
 
+
+
+def calculate_recommendation_variation(params: collections):
+
+    if params.type == type_consensus:
+
+        data = np.load(my_path + params.type + '_data.npy').item()
+        data = pd.DataFrame(data['data'], columns=data['header'])
+        data['anndats'] = pd.to_datetime(data['anndats'], format='%Y-%m-%d') + MonthEnd(0)
+        data.loc[data['amaskcd'].isna(), 'amaskcd'] = data['emaskcd']
+        # data.groupby(['cusip', 'amaskcd']).apply()
+        print(data.head(10))
+        print(data.info())
+
 @profile
-def AddGvkeyToTable(params):
+def AddGvkeyToTable(params: collections):
+
+    """
+    This function is used to add GVKEY to the ibes ticker or cusip 8.
+    :param params.type type_consensus, price_target
+    """
 
     if params.type == type_price_target:
+
         entete = ['ticker', 'cusip', 'emaskcd', 'horizon', 'value',
                   'estcur', 'anndats', 'amaskcd', 'exrat']
         res = np.load(params.type + '_data.npy')
@@ -224,7 +257,7 @@ def CalculateRecommendationVar(params):
     v = np.vectorize(convertDateToString)
     res['date'] = v(res['anndats'])
 
-    res = res.sort_values(["gvkey", "cusip", "amaskcd", "date"], ascending=[True, True, False,False])
+    res = res.sort_values(["gvkey","cusip", "amaskcd","date"], ascending=[True, True, False,False])
     res = res.iloc[:].reset_index(drop=True)
     res_p = res.iloc[1:, indice_for_var].reset_index(drop=True)
     res = res.iloc[:-1]
@@ -317,10 +350,12 @@ def SetDataToDB(params):
     ClientDB.close()
 
 if __name__ == '__main__':
-    params = table(type=type_price_target)
-    # AddGvkeyToTable(params)
-    CalculateRecommendationVar(params)
+
     params = table(type=type_consensus)
-    CalculateRecommendationVar(params)
+    calculate_recommendation_variation(params)
+    # AddGvkeyToTable(params)
+    # CalculateRecommendationVar(params)
+    # params = table(type=type_consensus)
+    # CalculateRecommendationVar(params)
 
     # SetDataToDB(params)

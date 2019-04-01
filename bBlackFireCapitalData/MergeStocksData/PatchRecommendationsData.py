@@ -24,6 +24,7 @@ def ReturnQuery(year, month):
                   }
              }
 
+
 def ReturnVariation(tab_, tab_2):
     return
 
@@ -70,7 +71,6 @@ def GetVarPerMaskCode(tabRecommendationPerAnalyst):
 
 
 
-
 def GetVariation(tab):
     d = dict()
 
@@ -90,6 +90,7 @@ def GetVariation(tab):
 
 
 def PatchRecommendationsData(params):
+
     tab_date = GenerateMonthlyTab(params.start_date, params.end_date)
     ClientDB = motor.motor_tornado.MotorClient(params.connectionstring)
     print(tab_date)

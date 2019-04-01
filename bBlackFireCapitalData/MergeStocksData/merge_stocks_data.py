@@ -252,7 +252,6 @@ if __name__ == '__main__':
     tab_month = generate_month("1984M1", "2018M10")
     t = ()
     print("consensus ---------------------------------------------")
-
     for date in tab_month:
         t += mean_ibes_data(date= date,type = 'consensus'),
 

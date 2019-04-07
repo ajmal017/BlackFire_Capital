@@ -1,6 +1,6 @@
 import motor
 import tornado
-
+import numpy as np
 import pandas as pd
 from pathlib import Path
 from datetime import date
@@ -12,7 +12,7 @@ from a_blackfire_capital_class.useful_class import CustomMultiprocessing
 from zBlackFireCapitalImportantFunctions.ConnectionString import TEST_CONNECTION_STRING, PROD_CONNECTION_STRING
 from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import SECTORS_MARKET_DATA_DB_NAME, \
     SECTORS_MARKET_DATA_INFO_DB_COL_NAME, NAICS, ECONOMICS_ZONES_DB_NAME, ECONOMICS_ZONES_DB_COL_NAME, \
-    SECTORS_MARKET_DATA_MAPPING_DB_COL_NAME
+    SECTORS_MARKET_DATA_MAPPING_DB_COL_NAME, TYPE_CONSENSUS, TYPE_PRICE_TARGET, M_SUMMARY_DB_COL_NAME
 
 
 class Sectors:
@@ -41,6 +41,13 @@ class Sectors:
     2. Save method is used to save the data into the Mongo DB.
 
     3. Get methods is used to get the Data we store in the Mongo DB.
+
+    Usage:
+    ------
+    1. save sector infos: Sectors(by=NAICS, connection_string=TEST_CONNECTION_STRING).save_sectors_info_in_mongodb()
+    2. save mapping sector and gvkey .save_sectors_mapping_in_mongodb()
+    3. save sector summary .save_monthly_sectors_summary()
+
 
     """
 
@@ -179,7 +186,7 @@ class Sectors:
         Description:
         ------------
 
-        This function is used to save the relationship between sectors, eco zone and gvkey.
+        This function is used to download the relationship between sectors, eco zone and gvkey.
 
         :return: dataFrame of mapping between gvkey, sector and eco zone.
         """
@@ -211,6 +218,7 @@ class Sectors:
 
         group = mapping.groupby(['eco zone', self._by])
         tab_parameter = [(self._by, name[1], name[0], stocks_info) for name, data in group]
+        print("\n########### Mapping eco zone and sectors ###########")
         result = CustomMultiprocessing().exec_in_parallel(tab_parameter, self._map_sector_and_stocks)
         mapping = pd.merge(result, sector_tab.astype(str), on=self._by)
 
@@ -234,9 +242,11 @@ class Sectors:
         data = self.download_sectors_mapping_in_mongodb()
         data['to_save'] = data.apply(lambda x: to_save(*x[['gvkey', 'eco zone', self._by, 'level']]), axis=1)
         client_db = motor.motor_tornado.MotorClient(self._connection_string)
+        print("\n########### save Mapping eco zone and sectors in mongo DB. ###########")
         db = client_db[SECTORS_MARKET_DATA_DB_NAME][self._by][SECTORS_MARKET_DATA_MAPPING_DB_COL_NAME]
         tornado.ioloop.IOLoop.current().run_sync(
             DataFromMongoDB(db, data.loc[:, 'to_save'].values.tolist()).set_data_in_db)
+        print("\n########### Mapping successfully saved in mongo DB. ###########")
 
     def get_sectors_mapping_from_db(self, **kwargs: dict) -> pd.DataFrame:
 
@@ -436,8 +446,7 @@ class Sectors:
             pptvar = None
 
         if group['nptvar'].sum() != 0:
-            # ptvar = (group['ptvar'] * group['nptvar']).sum() / group['nptvar'].sum()
-            ptvar=0
+            ptvar = (group['ptvar'] * group['nptvar']).sum() / group['nptvar'].sum()
         else:
             ptvar = None
 
@@ -455,7 +464,6 @@ class Sectors:
                            columns=['ret', 'pt_ret', 'mpt_ret', 'pptvar', 'ptvar', 'rec', 'rcvar'])
 
         tab = pd.concat([group[sum].sum().to_frame().transpose(), tab], axis=1, ignore_index=True)
-
         tab.columns = ['mc', 'vol', 'npt', 'npptvar', 'nptvar', 'nrec', 'nrcvar', 'ret', 'pt_ret', 'mpt_ret',
                        'pptvar', 'ptvar', 'rec', 'rcvar']
 
@@ -472,26 +480,40 @@ class Sectors:
         :param end_date:
         :return:
         """
+        print("\n########### Downloading sector and eco zone mapping from mongo DB. ###########")
         mapping = self.get_sectors_mapping_from_db()
-        m_summary = Stocks(self._connection_string).get_monthly_summary_from_mongodb(start_date, end_date, {}, None)
 
-        # map summary data and mapping.
-        m_summary = pd.merge(m_summary, mapping[['gvkey', 'eco zone', 'sector']], on=['gvkey'])
+        print("\n########### Downloading monthly stocks summary from mongo DB. ###########")
+        # m_summary = Stocks(self._connection_string).get_monthly_summary_from_mongodb(start_date, end_date, {}, None)
+        path = 'C:/Users/Ghislain/Google Drive/BlackFire Capital/Data/data clean.npy'
+        df = np.load(path).item()
+        m_summary = pd.DataFrame(df['data'], columns=df['header'])
+        m_summary.loc[m_summary['pt_return'] == 0, 'pt_return'] = None
+        m_summary.rename(columns={'isin': 'isin_or_cusip', 'return': 'ret', 'pt_return': 'pt_ret'}, inplace=True)
+        m_summary.reset_index(drop=True, inplace=True)
+        # m_summary = m_summary.head(1000)
 
         # shift market cap
-        group = m_summary[['date', 'sector', 'isin_or_cusip', 'mc']].groupby(['sector', 'isin_or_cusip'])
-        tab_parameter = [(data, ) for name, data in group]
+        print("\n########### shifting market cap for 1 month. ###########")
+        group = m_summary[['date', 'isin_or_cusip', 'mc']].groupby(['isin_or_cusip'])
+        tab_parameter = [(data,) for name, data in group]
         result = CustomMultiprocessing().exec_in_parallel(tab_parameter, self._shift_mc)
         result.rename(columns={'mc': 'mc_s'}, inplace=True)
-        m_summary = pd.merge(m_summary, result, left_on=m_summary.index, right_on=result.index)
+        m_summary = pd.merge(m_summary, result, left_on=m_summary.index, right_on=result.index, how='inner')
+
+        # map summary data and mapping.
+        print("\n########### Join summary data and sector. ###########")
+        m_summary = pd.merge(m_summary, mapping[['gvkey', 'eco zone', 'sector']], on=['gvkey'])
 
         # calculate sector summary
+        print("\n########### Compute sector summary ###########")
         header = ['date', 'sector', 'eco zone', 'mc', 'vol', 'npt', 'npptvar', 'nptvar', 'nrec', 'nrcvar',
                   'pt_ret', 'pptvar', 'ptvar', 'ret', 'rcvar', 'rec', 'mc_s']
         group = m_summary[header].groupby(['eco zone', 'sector', 'date'])
         tab_parameter = [(name, data) for name, data in group]
         result = CustomMultiprocessing().exec_in_parallel(tab_parameter, self._compute_sector_summary)
         result.dropna(subset=['ret'], inplace=True)
+        result.to_excel('test.xlsx')
 
         return result
 
@@ -503,6 +525,34 @@ class Sectors:
         :param end_date:
         :return:
         """
+        def save_to_mongodb(group):
+            """
+            This function is used to save the stocks price into the mongo db
+            :param group: group of stocks to save for a particular month
+            :return: None
+            """
+            month = group.name
+            db = client_db[SECTORS_MARKET_DATA_DB_NAME][self._by][M_SUMMARY_DB_COL_NAME][str(month)]
+            tornado.ioloop.IOLoop.current().run_sync(
+                DataFromMongoDB(db, group.loc[:, 'to_save'].values.tolist()).set_data_in_db)
+
+        def stack_summary(month, sector, eco_zone, vol, npt, npptvar, nptvar, nrec, nrcvar, pt_ret, pptvar, ptvar,
+                          ret, rcvar, rec, mc):
+
+            return InsertOne({'date': month, '_id': eco_zone + '_' + sector, 'vol': vol, 'ret': ret, 'mc': mc,
+                              TYPE_CONSENSUS: {'nrec': nrec, 'nrcvar': nrcvar, 'rcvar': rcvar, 'rec': rec},
+                              TYPE_PRICE_TARGET: {'npt': npt, 'npptvar': npptvar, 'nptvar': nptvar, 'pt_ret': pt_ret,
+                                                  'pptvar': pptvar, 'ptvar': ptvar}})
+
+        monthly_summary = self.download_monthly_sectors_summary(start_date, end_date)
+        monthly_summary.loc[:, 'date_m'] = monthly_summary.loc[:, 'date'].dt.strftime('%Y-%m')
+
+        header = ['date', 'sector', 'eco zone', 'vol', 'npt', 'npptvar', 'nptvar', 'nrec', 'nrcvar',
+                  'pt_ret', 'pptvar', 'ptvar', 'ret', 'rcvar', 'rec', 'mc']
+
+        monthly_summary.loc[:, 'to_save'] = monthly_summary.apply(lambda x: stack_summary(*x[header]), axis=1)
+        client_db = motor.motor_tornado.MotorClient(self._connection_string)
+        monthly_summary.groupby('date_m').apply(save_to_mongodb)
 
     def get_monthly_sectors_summary(self):
 
@@ -511,7 +561,9 @@ class Sectors:
         :return:
         """
 
+
 if __name__ == '__main__':
 
-    Sectors(by=NAICS, connection_string=TEST_CONNECTION_STRING).download_monthly_sectors_summary(date(2017, 1, 1),
-                                                                                                     date(2017, 12, 31))
+    # Sectors(by=NAICS, connection_string=PROD_CONNECTION_STRING).save_sectors_mapping_in_mongodb()
+    print(Sectors(by=NAICS, connection_string=PROD_CONNECTION_STRING).download_monthly_sectors_summary(
+        date(2017, 1, 1), date(2017, 12, 31)))

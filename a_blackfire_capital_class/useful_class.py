@@ -4,6 +4,7 @@ import multiprocessing
 from typing import Callable, Tuple, Union
 import pandas as pd
 import sys
+import smtplib, ssl
 
 
 class CustomMultiprocessing:
@@ -76,3 +77,35 @@ class CustomMultiprocessing:
         logger.write("\nTasks completed. Processed {} group in {:.1f}s\n".format(len(got), time.time() - start))
 
         return pd.concat(got)
+
+class SendSimulationState:
+
+    def __init__(self, message, **kwargs):
+
+        self._message = message
+        self._smtp_server = "smtp.gmail.com"
+        self._port = 587
+        self._sender_email = "blackfirecapitaldev@gmail.com"
+        self._password = "blackfirecapitaldev09"
+        self._receiver_email = kwargs.get('to', 'noupougi@gmail.com')
+
+    def send_email(self):
+
+        # Create a secure SSL context
+        context = ssl.create_default_context()
+
+        # Try to log in to server and send email
+        try:
+            server = smtplib.SMTP(self._smtp_server,self._port)
+            server.ehlo() # Can be omitted
+            server.starttls(context=context) # Secure the connection
+            server.ehlo() # Can be omitted
+            server.login(self._sender_email, self._password)
+            message = "Subject: Simulation Update. \n" + self._message
+
+            server.sendmail(self._sender_email, self._receiver_email, message)
+        except Exception as e:
+            # Print any error messages to stdout
+            print(e)
+        finally:
+            server.quit()

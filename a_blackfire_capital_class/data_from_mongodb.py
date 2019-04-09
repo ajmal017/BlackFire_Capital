@@ -35,7 +35,7 @@ class DataFromMongoDB:
             result = await self._data_table.bulk_write(self._data[0], ordered=False)
             print('Insertion result %s' % repr(result.bulk_api_result))
         except pymongo.errors.BulkWriteError as bwe:
-            print(bwe.details)
+            result = bwe.details
 
     async def get_data_from_db(self) -> pd.DataFrame:
 
@@ -85,6 +85,14 @@ class DataFromMongoDB:
         if records:
             frames.append(pd.DataFrame(records))
         return pd.concat(frames)
+
+    async def drop_col_from_db(self):
+
+        """
+        This fucntion is used to delete a collection from the mongo DB
+        """
+
+        await self._data_table.drop_collection(self._data[0])
 
 
 if __name__ == '__main__':

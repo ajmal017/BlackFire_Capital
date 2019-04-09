@@ -12,11 +12,11 @@ from typing import Callable
 from pymongo import InsertOne
 
 from a_blackfire_capital_class.data_from_mongodb import DataFromMongoDB
-from a_blackfire_capital_class.useful_class import CustomMultiprocessing
+from a_blackfire_capital_class.useful_class import CustomMultiprocessing, SendSimulationState
 from zBlackFireCapitalImportantFunctions.ConnectionString import TEST_CONNECTION_STRING, PROD_CONNECTION_STRING
 from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import STOCKS_MARKET_DATA_DB_NAME, \
     STOCKS_MARKET_DATA_INFO_DB_COL_NAME, STOCKS_MARKET_FORECASTS_INFO_DB_COL_NAME, TYPE_PRICE_TARGET, TYPE_CONSENSUS, \
-    SUMMARY_DB_COL_NAME, M_SUMMARY_DB_COL_NAME
+    SUMMARY_DB_COL_NAME, M_SUMMARY_DB_COL_NAME, NAICS
 
 ####################################################################################################################
 #
@@ -1214,6 +1214,7 @@ class Stocks:
 
         # Download Data using multiprocessing.
         summary = CustomMultiprocessing().exec_in_parallel(tab_parameter, self._get_monthly_stocks_price_from_mongodb)
+        summary.reset_index(drop=True, inplace=True)
 
         # Unstack _id, price target and consensus.
         start = time.time()
@@ -1255,6 +1256,7 @@ class Stocks:
 
         type_float = ['USD_to_curr', 'adj_factor', 'csho', 'pc', 'ph', 'pl', 'vol', 'rcvar', 'npt', 'nrcvar', 'pptvar',
                       'ptvar', 'npptvar', 'pt', 'rec', 'rcvar', 'nrec', 'nrcvar']
+
         summary[type_float] = summary[type_float].astype(float)
 
         return summary
@@ -1290,7 +1292,7 @@ class Stocks:
             data.set_index('date', inplace=True)
             data['return'] = data['adj_pc'].pct_change(freq='1M')
             data['pt_return'] = data[['adj_pc', 'pt']].pct_change(axis='columns')['pt'].fillna(0)
-            data['mc'] = data['csho'] * data['adj_pc']
+            data['mc'] = data['csho'] * data['adj_pc'] * data['adj_factor']
             return data.reset_index()
 
         result = group.groupby(['isin', 'curr']).apply(calculate_return).reset_index(drop=True)
@@ -1350,6 +1352,96 @@ class Stocks:
         :rtype: pd.DataFrame
         """
 
+        # print('\n************* Download of monthly data ******************')
+        # data = np.load('data without duplicates dates.npy').item()
+        # monthly_summary = pd.DataFrame(data['data'])
+        # monthly_summary.columns = data['header']
+
+        # monthly_summary['date'] = pd.DatetimeIndex(monthly_summary['date'])
+        # f_header = ['adj_factor', 'csho', 'pc', 'pl', 'ph', 'vol', 'USD_to_curr', 'rec', 'rcvar', 'nrec', 'nrcvar',
+        #             'ptvar', 'npt', 'nptvar', 'pptvar', 'npptvar', 'pt', 'adj_pc']
+        # monthly_summary[f_header] = monthly_summary[f_header].astype(float)
+        #
+        # print(monthly_summary.info())
+        #
+        # monthly_summary['date'] = pd.DatetimeIndex(monthly_summary['date']) + pd.offsets.MonthEnd(0)
+        # group = monthly_summary.groupby('gvkey')
+        # tab_parameter = [(data,) for name, data in group]
+        # patch_monthly_summary = CustomMultiprocessing().exec_in_parallel(tab_parameter, self._correct_stocks)
+        #
+        # d = dict()
+        # d['header'] = patch_monthly_summary.columns
+        # d['data'] = patch_monthly_summary
+        # np.save('data clean.npy', d)
+        # message = "download completed"
+        # SendSimulationState(message).send_email()
+        # print(patch_monthly_summary.info())
+
+        data = np.load('data clean.npy').item()
+        patch_monthly_summary = pd.DataFrame(data['data'])
+        patch_monthly_summary.columns = data['header']
+        print(patch_monthly_summary.info())
+        # patch_monthly_summary = patch_monthly_summary[patch_monthly_summary['gvkey'] == '001690']
+        header = ['date', 'gvkey', 'isin', 'csho', 'vol', 'pc', 'ph', 'pl', 'adj_factor', 'adj_pc', 'mc',
+                  'return', 'curr', 'USD_to_curr', 'rec', 'rcvar', 'nrec', 'nrcvar', 'ptvar', 'npt',
+                  'nptvar', 'pptvar', 'npptvar', 'pt', 'pt_return']
+        patch_monthly_summary.dropna(subset=['mc'], inplace=True)
+        patch_monthly_summary.dropna(subset=['return'], inplace=True)
+
+        patch_monthly_summary.loc[patch_monthly_summary['pt_return'] == 0, 'pt_return'] = None
+        print(patch_monthly_summary.head())
+        # patch_monthly_summary.loc[:, 'to_save'] = patch_monthly_summary.apply(
+        #     lambda x: self._stack_summary(*x[header]), axis=1)
+        #
+        # print(patch_monthly_summary['to_save'].values[5])
+
+
+        client_db = motor.motor_tornado.MotorClient(PROD_CONNECTION_STRING)
+
+        def _save_to_mongodb(month, group):
+
+            def stack_summary(date, gvkey, isin, csho, vol, pc, ph, pl, adj_factor, adj_pc, mc, ret, curr, USD_to_curr,
+                              rec, rcvar, nrec, nrcvar, ptvar, npt, nptvar, pptvar, npptvar, pt, pt_return):
+
+                return InsertOne({'date': date, '_id': gvkey, 'isin_or_cusip': isin, 'csho': csho, 'vol': vol, 'pc': pc,
+                                  'ph': ph, 'pl': pl, 'adj_factor': adj_factor, 'adj_pc': adj_pc, 'mc': mc, 'ret': ret,
+                                  'curr': curr, 'USD_to_curr': USD_to_curr,
+                                  TYPE_CONSENSUS: {'rec': rec, 'rcvar': rcvar, 'nrec': nrec, 'nrcvar': nrcvar},
+                                  TYPE_PRICE_TARGET: {'ptvar': ptvar, 'npt': npt, 'nptvar': nptvar, 'pptvar': pptvar,
+                                                      'npptvar': npptvar, 'pt': pt, 'pt_ret': pt_return}})
+
+            header = ['date', 'gvkey', 'isin', 'csho', 'vol', 'pc', 'ph', 'pl', 'adj_factor', 'adj_pc', 'mc', 'return',
+                      'curr', 'USD_to_curr', 'rec', 'rcvar', 'nrec', 'nrcvar', 'ptvar', 'npt', 'nptvar', 'pptvar',
+                      'npptvar', 'pt', 'pt_return']
+
+            group.loc[:, 'to_save'] = group.apply(lambda x: stack_summary(*x[header]), axis=1)
+
+            if group.shape[0] > 0:
+                db = client_db[STOCKS_MARKET_DATA_DB_NAME][M_SUMMARY_DB_COL_NAME][month]
+                tornado.ioloop.IOLoop.current().run_sync(
+                    DataFromMongoDB(db, group.loc[:, 'to_save'].values.tolist()).set_data_in_db)
+            return 0
+
+        group = patch_monthly_summary.groupby('date_m')
+        # tab_parameter = [(name, data) for name, data in group]
+
+
+        for name, data in group:
+            _save_to_mongodb(name, data)
+            print('date {} completed'.format(name))
+        # patch_monthly_summary = CustomMultiprocessing().exec_in_parallel(tab_parameter, self._save_to_mongodb)
+
+        # d = dict()
+        # d['header'] = result.columns
+        # d['data'] = result
+        # np.save('data without duplicates dates.npy', d)
+        message = "Save in mongo db completed"
+        SendSimulationState(message).send_email()
+
+
+        return None
+
+
         monthly_summary = self._get_brute_monthly_stocks_price_from_mongodb(start_date, end_date)
         monthly_summary.sort_values(by=['isin', 'curr', 'date'], ascending=[True, True, True], inplace=True)
         monthly_summary = monthly_summary[(monthly_summary['isin'].isna() == False) &
@@ -1359,18 +1451,35 @@ class Stocks:
         monthly_summary.loc[:, 'adj_pc'] = monthly_summary['pc'] / monthly_summary['adj_factor'] / monthly_summary['USD_to_curr']
 
         # remove non last month dates
+        print("\n*************** Remove date non end of month ************")
         monthly_summary.loc[:, 'date_m'] = monthly_summary.loc[:, 'date'].dt.strftime('%Y-%m')
         group = monthly_summary.groupby(['gvkey', 'date_m'])
+
         tab_parameter = [(data,) for name, data in group]
         monthly_summary = CustomMultiprocessing().exec_in_parallel(tab_parameter, self._remove_non_last_date)
 
         # fill csho, take max historical data, calculate return
+        print("\n*************** Correct monthly data. ********************")
         monthly_summary['date'] = pd.DatetimeIndex(monthly_summary['date']) + pd.offsets.MonthEnd(0)
         group = monthly_summary.groupby('gvkey')
         tab_parameter = [(data,) for name, data in group]
         patch_monthly_summary = CustomMultiprocessing().exec_in_parallel(tab_parameter, self._correct_stocks)
+        patch_monthly_summary.loc[patch_monthly_summary['pt_return'] == 0, 'pt_return'] = None
 
         return patch_monthly_summary
+
+
+    @staticmethod
+    def _stack_summary(date, gvkey, isin, csho, vol, pc, ph, pl, adj_factor, adj_pc, mc, ret, curr, USD_to_curr,
+                          rec, rcvar, nrec, nrcvar, ptvar, npt, nptvar, pptvar, npptvar, pt, pt_return):
+
+            return InsertOne({'date': date, '_id': gvkey, 'isin_or_cusip': isin, 'csho': csho, 'vol': vol, 'pc': pc,
+                              'ph': ph, 'pl': pl, 'adj_factor': adj_factor, 'adj_pc': adj_pc, 'mc': mc, 'ret': ret,
+                              'curr': curr, 'USD_to_curr': USD_to_curr,
+                              TYPE_CONSENSUS: {'rec': rec, 'rcvar': rcvar, 'nrec': nrec, 'nrcvar': nrcvar},
+                              TYPE_PRICE_TARGET: {'ptvar': ptvar, 'npt': npt, 'nptvar': nptvar, 'pptvar': pptvar,
+                                                  'npptvar': npptvar, 'pt': pt, 'pt_ret': pt_return}})
+
 
     def save_monthly_stocks_summary(self, start_date: date, end_date: date):
 
@@ -1424,9 +1533,28 @@ class Stocks:
         header = ['date', 'gvkey', 'isin', 'csho', 'vol', 'pc', 'ph', 'pl', 'adj_factor', 'adj_pc', 'mc', 'return',
                   'curr', 'USD_to_curr', 'rec', 'rcvar', 'nrec', 'nrcvar', 'ptvar', 'npt', 'nptvar', 'pptvar',
                   'npptvar', 'pt', 'pt_return']
-        summary.loc[:, 'to_save'] = summary.apply(lambda x: stack_summary(*x[header]), axis=1)
+        summary['to_save'] = summary.apply(lambda x: stack_summary(*x[header]), axis=1)
         client_db = motor.motor_tornado.MotorClient(self._connection_string)
+
+
+        print("\n******************* Save result in the DB ************************")
         summary.groupby('date_m').apply(save_to_mongodb)
+
+    def drop_monthly_stocks_summary(self, start_date: date, end_date: date):
+
+        """
+        Description:
+
+        This function is used to delete saved collections between start and end date.
+
+        """
+        client_db = motor.motor_tornado.MotorClient(self._connection_string)
+        db = client_db[STOCKS_MARKET_DATA_DB_NAME]
+        date_tab = pd.date_range(start_date, end_date, freq='MS').strftime('%Y-%m').tolist()
+
+        for name in date_tab:
+            tornado.ioloop.IOLoop.current().run_sync(
+                DataFromMongoDB(db, M_SUMMARY_DB_COL_NAME + '.' + name).drop_col_from_db)
 
     def _get_monthly_summary_from_mongodb(self, my_date: date, query: dict, to_display: dict) -> pd.DataFrame:
 
@@ -1560,8 +1688,42 @@ class Stocks:
 
 if __name__ == '__main__':
 
-    v = Stocks(TEST_CONNECTION_STRING).get_monthly_summary_from_mongodb(date(2017, 1, 1), date(2017, 12, 12), {}, None)
+    # Stocks(PROD_CONNECTION_STRING).drop_monthly_stocks_summary(date(1998, 1, 1), date(2017, 12, 31))
+
+    # result = []
+    #
+    # for year in range(2017, 2018):
+    #     print("\n *********** Year: {} Started **************".format(year))
+    #     data = Stocks(PROD_CONNECTION_STRING)._get_brute_monthly_stocks_price_from_mongodb(date(year, 12, 1),
+    #                                                                                        date(year, 12, 31))
+    #
+    #     result.append(data)
+    #     print("\n *********** Year: {} Completed **************".format(year))
+    #
+    # result = pd.concat(result, ignore_index=True)
+
+    # Stocks(PROD_CONNECTION_STRING).save_monthly_stocks_summary(date(1998, 1, 1), date(2017, 12, 31))
+
+    # date_tab = pd.date_range(date(1998, 1, 1), date(2007, 12, 31), freq='MS').strftime('%Y-%m').tolist()
+    # tab_parameter = [(my_date,) for my_date in date_tab]
+
+    # Download Data using multiprocessing.
+    # summary = CustomMultiprocessing().exec_in_parallel(tab_parameter, self._get_monthly_stocks_price_from_mongodb)
+
+
+
+    # Stocks(TEST_CONNECTION_STRING).save_monthly_stocks_summary(date(1998, 1, 1), date(2017, 12, 31))
     # print(v.head(15))
     # print(v.shape)
     # query = {'gvkey': '019117'}
     # print(Stocks(CONNECTION_STRING).get_stocks_forecast_info_from_mongodb(query, None))
+    print(Stocks(PROD_CONNECTION_STRING).
+          get_monthly_summary_with_eco_zone_and_sector_from_mongodb(start_date=date(2017, 1, 1),
+                                                                    end_date=date(2017, 12, 31),
+                                                                    sector=NAICS,
+                                                                    query_sector_mapping={'eco zone': 'USD', 'level': '2'},
+                                                                    to_display=None))
+    # print(Sectors(by=NAICS, connection_string=PROD_CONNECTION_STRING).
+    #       get_stocks_summary_with_sector_and_eco_zone(start_date=date(2017, 1, 1), end_date=date(2017, 12, 31),
+    #                                                   query_sector_mapping={'eco zone': 'USD', 'level': '2'},
+    #                                                   to_display=None))

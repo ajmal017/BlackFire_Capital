@@ -110,6 +110,7 @@ def correct_group_stocks(group):
 
 
 def correct_stocks(group):
+
     group.set_index('date', inplace=True)
     group[['csho', 'adj_pc']] = group[['csho', 'adj_pc']].fillna(method='ffill')
     group['return'] = group['adj_pc'].pct_change(fill_method='ffill', freq='1M')
@@ -533,6 +534,7 @@ if __name__ == "__main__":
     result = pool.map(SetSectorPriceToDB, tup)
     pool.close()
     pool.join()
+
 
     monthly_prices = pd.concat(result)
     np.save('monthly_prices.npy', monthly_prices)

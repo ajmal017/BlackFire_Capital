@@ -356,8 +356,11 @@ class Sectors:
     # Merge stocks summary with sector and eco zone.
     #
     ###################################################################################################################
-    def get_stocks_summary_with_sector_and_eco_zone(self, start_date: date, end_date: date, query_sector_mapping: dict,
-                                                    to_display: dict) -> pd.DataFrame:
+
+    def get_monthly_stocks_summary_with_eco_zone_and_sector_from_mongodb(self, start_date: date,
+                                                                         end_date: date,
+                                                                         query_sector_mapping: dict,
+                                                                         to_display: dict) -> pd.DataFrame:
 
         """
         Description:
@@ -792,6 +795,7 @@ class Sectors:
 
         # Download Data using multiprocessing.
         summary = CustomMultiprocessing().exec_in_parallel(tab_parameter, self._get_monthly_sectors_summary)
+        summary.reset_index(drop=True, inplace=True)
 
         # Unstack _id, price target and consensus.
         start = time.time()
@@ -813,6 +817,6 @@ if __name__ == '__main__':
 
     # Sectors(by=NAICS, connection_string=PROD_CONNECTION_STRING).save_sectors_mapping_in_mongodb()
     print(Sectors(by=NAICS, connection_string=PROD_CONNECTION_STRING).
-          get_stocks_summary_with_sector_and_eco_zone(start_date=date(2017, 1, 1), end_date=date(2017, 12, 31),
+          get_monthly_stocks_summary_with_eco_zone_and_sector_from_mongodb(start_date=date(2017, 1, 1), end_date=date(2017, 12, 31),
                                                       query_sector_mapping={'eco zone': 'USD', 'level': '2'},
                                                       to_display=None))

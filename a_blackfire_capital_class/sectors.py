@@ -1,3 +1,4 @@
+import time
 import motor
 import tornado
 import numpy as np
@@ -86,7 +87,6 @@ class Sectors:
 
             data['Level'] = data['Level'].astype(int)
             data = data[(data['Level'] < 3) & (data['Superscript'] != 'CAN')]
-            data.to_excel('test.xlsx')
             data['to_save'] = data.apply(lambda x: to_save(*x[['Level', 'Code', 'Class title', 'Class definition']]),
                                          axis=1)
 
@@ -353,6 +353,73 @@ class Sectors:
 
     ###################################################################################################################
     #
+    # Merge stocks summary with sector and eco zone.
+    #
+    ###################################################################################################################
+    def get_stocks_summary_with_sector_and_eco_zone(self, start_date: date, end_date: date, query_sector_mapping: dict,
+                                                    to_display: dict) -> pd.DataFrame:
+
+        """
+        Description:
+        ------------
+
+        This function is used to merge stocks summary with eco zone and sector
+
+        Parameter:
+        ----------
+
+        :param start_date: start date of the stocks summary
+        :param end_date: end date of stocks summary
+        :param query_sector_mapping: sector and zone to query from the mongo DB.
+        :param to_display: data to display from the query
+
+        Usage:
+        -----
+        data = Sectors(by=NAICS, connection_string=PROD_CONNECTION_STRING).
+        get_stocks_summary_with_sector_and_eco_zone(start_date=date(2017, 1, 1), end_date=date(2017, 12, 31),
+                                                    query_sector_mapping={'eco zone': 'USD', 'level': '2'},
+                                                    to_display=None)
+        data.head(15)
+
+               USD_to_curr   gvkey  adj_factor  ...   eco zone  sector level
+        0              1.0  001225         1.0  ...        USD     221     2
+        1              1.0  001225         1.0  ...        USD     221     2
+        2              1.0  001225         1.0  ...        USD     221     2
+        3              1.0  001225         1.0  ...        USD     221     2
+        4              1.0  001225         1.0  ...        USD     221     2
+        5              1.0  001225         1.0  ...        USD     221     2
+        6              1.0  001225         1.0  ...        USD     221     2
+        7              1.0  001225         1.0  ...        USD     221     2
+        8              1.0  001225         1.0  ...        USD     221     2
+        9              1.0  001254         1.0  ...        USD     483     2
+        10             1.0  001254         1.0  ...        USD     483     2
+        11             1.0  001254         1.0  ...        USD     483     2
+        12             1.0  001254         1.0  ...        USD     483     2
+        13             1.0  001254         1.0  ...        USD     483     2
+        14             1.0  001254         1.0  ...        USD     483     2
+        ...
+
+        Return:
+        -------
+        :return: DataFrame of the stocks summary with the eco zone and sector
+        :rtype: pd.DataFrame
+        """
+
+        print("\n########### Downloading sector and eco zone mapping from mongo DB. ###########")
+        mapping = self.get_sectors_mapping_from_db(query=query_sector_mapping, to_display=to_display)
+
+        print("\n########### Downloading monthly stocks summary from mongo DB. ###########")
+        m_summary = Stocks(self._connection_string).get_monthly_summary_from_mongodb(start_date, end_date, {}, None)
+        m_summary.reset_index(drop=True, inplace=True)
+
+        # map summary data and mapping.
+        print("\n########### Join summary data and sector. ###########")
+        m_summary = pd.merge(m_summary, mapping[['gvkey', 'eco zone', 'sector', 'level']], on=['gvkey'])
+
+        return m_summary
+
+    ###################################################################################################################
+    #
     # Sectors Data.
     #
     ###################################################################################################################
@@ -475,23 +542,61 @@ class Sectors:
 
     def download_monthly_sectors_summary(self, start_date: date, end_date: date) -> pd.DataFrame:
         """
+        Description:
+        ------------
+        This function is used to download the stocks summary and aggregate that at the sectors level.
 
-        :param start_date:
-        :param end_date:
-        :return:
+        Parameter:
+        ----------
+
+        :param start_date: begin date
+        :param end_date: end date
+
+        Usage:
+        -----
+        m_summary = Sectors(by=NAICS, connection_string=PROD_CONNECTION_STRING).download_monthly_sectors_summary(
+                    date(2017, 1, 1), date(2017, 12, 31))
+
+        m_summary.head(15)
+
+                       mc         vol    npt  ...    sector                date  level
+        0   1.968753e+09         0.0   20.0  ...        11 2017-12-31 16:00:00      1
+        1   1.013969e+09         0.0   12.0  ...       111 2017-12-31 16:00:00      2
+        2   6.009197e+07         0.0    3.0  ...       112 2017-12-31 16:00:00      2
+        3   9.498733e+07         0.0    0.0  ...       113 2017-12-31 16:00:00      2
+        4   9.012113e+06         0.0    0.0  ...       114 2017-12-31 16:00:00      2
+        5   7.906921e+08         0.0    5.0  ...       115 2017-12-31 16:00:00      2
+        6   3.854586e+11  55423664.0  516.0  ...        21 2017-12-31 16:00:00      1
+        7   3.830703e+10         0.0   59.0  ...       211 2017-12-31 16:00:00      2
+        8   3.425986e+11  55423664.0  441.0  ...       212 2017-12-31 16:00:00      2
+        9   4.545411e+09         0.0   16.0  ...       213 2017-12-31 16:00:00      2
+        10  2.371846e+10         0.0   43.0  ...        22 2017-12-31 16:00:00      1
+        11  2.371846e+10         0.0   43.0  ...       221 2017-12-31 16:00:00      2
+        12  5.680426e+09         0.0   31.0  ...        23 2017-12-31 16:00:00      1
+        13  3.948956e+08         0.0    3.0  ...       236 2017-12-31 16:00:00      2
+        14  4.003965e+09         0.0   21.0  ...       237 2017-12-31 16:00:00      2
+        ...
+
+        Return:
+        -------
+
+        :return: DataFrame of sectors summary information.
+        :rtype: pd.DataFrame.
         """
+
         print("\n########### Downloading sector and eco zone mapping from mongo DB. ###########")
         mapping = self.get_sectors_mapping_from_db()
 
         print("\n########### Downloading monthly stocks summary from mongo DB. ###########")
-        # m_summary = Stocks(self._connection_string).get_monthly_summary_from_mongodb(start_date, end_date, {}, None)
-        path = 'C:/Users/Ghislain/Google Drive/BlackFire Capital/Data/data clean.npy'
-        df = np.load(path).item()
-        m_summary = pd.DataFrame(df['data'], columns=df['header'])
-        m_summary.loc[m_summary['pt_return'] == 0, 'pt_return'] = None
-        m_summary.rename(columns={'isin': 'isin_or_cusip', 'return': 'ret', 'pt_return': 'pt_ret'}, inplace=True)
+        m_summary = Stocks(self._connection_string).get_monthly_summary_from_mongodb(start_date, end_date, {}, None)
         m_summary.reset_index(drop=True, inplace=True)
-        # m_summary = m_summary.head(1000)
+
+        # path = 'C:/Users/Ghislain/Google Drive/BlackFire Capital/Data/data clean.npy'
+        # df = np.load(path).item()
+        # m_summary = pd.DataFrame(df['data'], columns=df['header'])
+        # m_summary.loc[m_summary['pt_return'] == 0, 'pt_return'] = None
+        # m_summary.rename(columns={'isin': 'isin_or_cusip', 'return': 'ret', 'pt_return': 'pt_ret'}, inplace=True)
+        # m_summary.reset_index(drop=True, inplace=True)
 
         # shift market cap
         print("\n########### shifting market cap for 1 month. ###########")
@@ -509,61 +614,205 @@ class Sectors:
         print("\n########### Compute sector summary ###########")
         header = ['date', 'sector', 'eco zone', 'mc', 'vol', 'npt', 'npptvar', 'nptvar', 'nrec', 'nrcvar',
                   'pt_ret', 'pptvar', 'ptvar', 'ret', 'rcvar', 'rec', 'mc_s']
-        group = m_summary[header].groupby(['eco zone', 'sector', 'date'])
-        tab_parameter = [(name, data) for name, data in group]
-        result = CustomMultiprocessing().exec_in_parallel(tab_parameter, self._compute_sector_summary)
-        result.dropna(subset=['ret'], inplace=True)
-        result.to_excel('test.xlsx')
+        sector_m_summary = []
+        for zone in mapping['eco zone'].unique():
+            data = m_summary[m_summary['eco zone'] == zone]
+            group = data[header].groupby(['eco zone', 'sector', 'date'])
+            tab_parameter = [(name, data) for name, data in group]
+            result = CustomMultiprocessing().exec_in_parallel(tab_parameter, self._compute_sector_summary)
+            result.dropna(subset=['ret'], inplace=True)
+            sector_m_summary.append(result)
+            print('Done for economics zone: {}'.format(zone))
 
-        return result
+        sector_m_summary = pd.concat(sector_m_summary, ignore_index=True)
+        sector_m_summary = pd.merge(left=sector_m_summary,
+                                    right=mapping.drop_duplicates(subset=['sector'])[['sector', 'level']],
+                                    on=['sector'])
+        sector_m_summary.loc[sector_m_summary['pt_ret'] == 0, 'pt_ret'] = None
+
+        return sector_m_summary
 
     def save_monthly_sectors_summary(self, start_date: date, end_date: date) -> pd.DataFrame:
 
         """
+        Description:
+        -----------
 
-        :param start_date:
-        :param end_date:
-        :return:
+        This function is used to save sectors summary in the mongo DB.
+
+        Parameter:
+        ----------
+
+        :param start_date: begin date
+        :param end_date: end date
+
+        Usage:
+        -----
+        Sectors(by=NAICS, connection_string=PROD_CONNECTION_STRING).save_monthly_sectors_summary(date(2017, 11, 1),
+         date(2017, 12, 31))
+
+         Return:
+         -------
+         :return None
         """
-        def save_to_mongodb(group):
+
+        def save_to_mongodb(group, by):
             """
             This function is used to save the stocks price into the mongo db
             :param group: group of stocks to save for a particular month
             :return: None
             """
             month = group.name
-            db = client_db[SECTORS_MARKET_DATA_DB_NAME][self._by][M_SUMMARY_DB_COL_NAME][str(month)]
+            db = client_db[SECTORS_MARKET_DATA_DB_NAME][by][M_SUMMARY_DB_COL_NAME][str(month)]
             tornado.ioloop.IOLoop.current().run_sync(
                 DataFromMongoDB(db, group.loc[:, 'to_save'].values.tolist()).set_data_in_db)
 
-        def stack_summary(month, sector, eco_zone, vol, npt, npptvar, nptvar, nrec, nrcvar, pt_ret, pptvar, ptvar,
-                          ret, rcvar, rec, mc):
+        def stack_summary(mc, vol, npt, npptvar, nptvar, nrec, nrcvar, ret, pt_ret, mpt_ret, pptvar, ptvar, rec, rcvar,
+                          eco_zone, sector, month, level):
 
             return InsertOne({'date': month, '_id': eco_zone + '_' + sector, 'vol': vol, 'ret': ret, 'mc': mc,
+                              'level': level, 'eco zone': eco_zone, 'sector': sector,
                               TYPE_CONSENSUS: {'nrec': nrec, 'nrcvar': nrcvar, 'rcvar': rcvar, 'rec': rec},
                               TYPE_PRICE_TARGET: {'npt': npt, 'npptvar': npptvar, 'nptvar': nptvar, 'pt_ret': pt_ret,
-                                                  'pptvar': pptvar, 'ptvar': ptvar}})
+                                                  'mpt_ret': mpt_ret, 'pptvar': pptvar, 'ptvar': ptvar}})
 
         monthly_summary = self.download_monthly_sectors_summary(start_date, end_date)
         monthly_summary.loc[:, 'date_m'] = monthly_summary.loc[:, 'date'].dt.strftime('%Y-%m')
 
-        header = ['date', 'sector', 'eco zone', 'vol', 'npt', 'npptvar', 'nptvar', 'nrec', 'nrcvar',
-                  'pt_ret', 'pptvar', 'ptvar', 'ret', 'rcvar', 'rec', 'mc']
+        header = ['mc', 'vol', 'npt', 'npptvar', 'nptvar', 'nrec', 'nrcvar', 'ret', 'pt_ret', 'mpt_ret', 'pptvar',
+                  'ptvar', 'rec', 'rcvar', 'eco zone', 'sector', 'date', 'level']
 
         monthly_summary.loc[:, 'to_save'] = monthly_summary.apply(lambda x: stack_summary(*x[header]), axis=1)
         client_db = motor.motor_tornado.MotorClient(self._connection_string)
-        monthly_summary.groupby('date_m').apply(save_to_mongodb)
+        monthly_summary.groupby('date_m').apply(save_to_mongodb, self._by)
 
-    def get_monthly_sectors_summary(self):
+    def _get_monthly_sectors_summary(self, month: date,  query: dict, to_display: dict):
 
         """
+        Description:
+        ------------
 
-        :return:
+        This function is used to download sectors summary information for one particular month.
+
+        Parameter:
+        ----------
+
+        :param month: date where to query the information
+        :param query: information to query from the DB
+        :param to_display: information to display from the query.
+
+        Usage:
+        -----
+        data = Sectors(by=NAICS, connection_string=PROD_CONNECTION_STRING)._get_monthly_sectors_summary(month='2017-01',
+                query={'eco zone': 'USD'}, to_display=None)
+        data.head(15)
+
+                _id                date eco zone    ...       pptvar    pt_ret     ptvar
+        0   USD_211 2017-01-31 16:00:00      USD    ...     0.082008  0.169854  0.083369
+        1   USD_213 2017-01-31 16:00:00      USD    ...     0.113839  0.087910  0.113839
+        2   USD_221 2017-01-31 16:00:00      USD    ...     0.031461  0.043345  0.031160
+        3   USD_236 2017-01-31 16:00:00      USD    ...     0.049721  0.092407  0.049721
+        4   USD_237 2017-01-31 16:00:00      USD    ...     0.103255  0.139774  0.103255
+        5   USD_238 2017-01-31 16:00:00      USD    ...     0.171608  0.006382  0.171608
+        6   USD_311 2017-01-31 16:00:00      USD    ...     0.016779  0.080997  0.016779
+        7   USD_312 2017-01-31 16:00:00      USD    ...     0.011832  0.053955  0.011832
+        8   USD_325 2017-01-31 16:00:00      USD    ...    -0.039207  0.142147 -0.038148
+        9   USD_327 2017-01-31 16:00:00      USD    ...     0.068551  0.050851  0.068551
+        10  USD_336 2017-01-31 16:00:00      USD    ...     0.070346  0.068410  0.068153
+        11  USD_445 2017-01-31 16:00:00      USD    ...    -0.063699  0.067507 -0.063699
+        12  USD_448 2017-01-31 16:00:00      USD    ...    -0.003185  0.461937 -0.001205
+        13  USD_481 2017-01-31 16:00:00      USD    ...     0.117670  0.186284  0.117670
+        14  USD_483 2017-01-31 16:00:00      USD    ...    -0.115521 -0.009296 -0.115521
+        ....
+
+        Return:
+        -------
+
+        :return: DataFrame with the sectors information for the month
+        :rtype pd.DataFrame
         """
+
+        client_db = motor.motor_tornado.MotorClient(self._connection_string)
+        db = client_db[SECTORS_MARKET_DATA_DB_NAME][self._by][M_SUMMARY_DB_COL_NAME][str(month)]
+        data = tornado.ioloop.IOLoop.current().run_sync(DataFromMongoDB(db, query, to_display).get_data_from_db)
+
+        return data
+
+    def get_monthly_sectors_summary(self, start_date: date, end_date: date, query: dict, to_display: dict) \
+            -> pd.DataFrame:
+
+        """
+        Description:
+        ------------
+
+        This function is used to get the sectors summary information from the mongo DB.
+
+        Parameter:
+        ----------
+
+        :param start_date: begin date
+        :param end_date: end date
+        :param query: dict of data to query
+        :param to_display: data to display from the query
+
+        Usage:
+        -----
+        data = Sectors(by=NAICS, connection_string=PROD_CONNECTION_STRING).get_monthly_sectors_summary(
+                start_date=date(2017, 1, 1), end_date=date(2017, 12, 31), query={'eco zone': 'USD'}, to_display=None)
+        data.head(15)
+
+                _id                date eco zone    ...       pptvar    pt_ret     ptvar
+        0   USD_211 2017-01-31 16:00:00      USD    ...     0.082008  0.169854  0.083369
+        1   USD_213 2017-01-31 16:00:00      USD    ...     0.113839  0.087910  0.113839
+        2   USD_221 2017-01-31 16:00:00      USD    ...     0.031461  0.043345  0.031160
+        3   USD_236 2017-01-31 16:00:00      USD    ...     0.049721  0.092407  0.049721
+        4   USD_237 2017-01-31 16:00:00      USD    ...     0.103255  0.139774  0.103255
+        5   USD_238 2017-01-31 16:00:00      USD    ...     0.171608  0.006382  0.171608
+        6   USD_311 2017-01-31 16:00:00      USD    ...     0.016779  0.080997  0.016779
+        7   USD_312 2017-01-31 16:00:00      USD    ...     0.011832  0.053955  0.011832
+        8   USD_325 2017-01-31 16:00:00      USD    ...    -0.039207  0.142147 -0.038148
+        9   USD_327 2017-01-31 16:00:00      USD    ...     0.068551  0.050851  0.068551
+        10  USD_336 2017-01-31 16:00:00      USD    ...     0.070346  0.068410  0.068153
+        11  USD_445 2017-01-31 16:00:00      USD    ...    -0.063699  0.067507 -0.063699
+        12  USD_448 2017-01-31 16:00:00      USD    ...    -0.003185  0.461937 -0.001205
+        13  USD_481 2017-01-31 16:00:00      USD    ...     0.117670  0.186284  0.117670
+        14  USD_483 2017-01-31 16:00:00      USD    ...    -0.115521 -0.009296 -0.115521
+        ....
+
+        Return:
+        -------
+
+        :return: DataFrame with the sectors information for the month
+        :rtype pd.DataFrame
+        """
+
+        # Create datetime range between start and end date.
+        date_tab = pd.date_range(start_date, end_date, freq='MS').strftime('%Y-%m').tolist()
+        tab_parameter = [(my_date, query, to_display,) for my_date in date_tab]
+
+        # Download Data using multiprocessing.
+        summary = CustomMultiprocessing().exec_in_parallel(tab_parameter, self._get_monthly_sectors_summary)
+
+        # Unstack _id, price target and consensus.
+        start = time.time()
+        pt = pd.DataFrame(summary[TYPE_PRICE_TARGET].tolist(), index=summary.index)
+        cs = pd.DataFrame(summary[TYPE_CONSENSUS].tolist(), index=summary.index)
+
+        # Merge unstack data with summary table
+        other = [cs, pt]
+        summary.drop([TYPE_PRICE_TARGET, TYPE_CONSENSUS], axis=1, inplace=True)
+        summary = pd.concat([summary] + other, axis=1)
+
+        print("\nUnstack Price Target and Consensus in {:.1f}s".format(time.time() - start))
+        print("\nDownload completed.\n")
+
+        return summary
 
 
 if __name__ == '__main__':
 
     # Sectors(by=NAICS, connection_string=PROD_CONNECTION_STRING).save_sectors_mapping_in_mongodb()
-    print(Sectors(by=NAICS, connection_string=PROD_CONNECTION_STRING).download_monthly_sectors_summary(
-        date(2017, 1, 1), date(2017, 12, 31)))
+    print(Sectors(by=NAICS, connection_string=PROD_CONNECTION_STRING).
+          get_stocks_summary_with_sector_and_eco_zone(start_date=date(2017, 1, 1), end_date=date(2017, 12, 31),
+                                                      query_sector_mapping={'eco zone': 'USD', 'level': '2'},
+                                                      to_display=None))

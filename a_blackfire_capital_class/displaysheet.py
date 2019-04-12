@@ -14,7 +14,7 @@ import numpy as np
 from pathlib import Path
 
 
-class DisplaysheetStatistics:
+class DisplaySheetStatistics:
     """
 	Displays a one pager including some basics statistics for the portfolio strategy.
 	"""
@@ -22,7 +22,11 @@ class DisplaysheetStatistics:
     def __init__(self, portfolio, title, description, benchmark=None, rolling_periods=12, rolling_sharpe=True):
 
         self.portfolio = portfolio.sort_index()
-        self.benchmark = benchmark.sort_index()
+        if benchmark:
+            self.benchmark = benchmark.sort_index()
+        else:
+            self.benchmark = None
+
         self.rolling_periods = rolling_periods
         self.title = title
         self.description = description
@@ -35,14 +39,12 @@ class DisplaysheetStatistics:
 		:return:
 		"""
         portfolio = self.portfolio
-
-        portfolio = portfolio
         stats = dict()
 
-        my_path = Path(__file__).parent.parent.parent.resolve()
-        us_bonds = np.load(str(my_path) + '/eBlackFireCapitalFiles/monthly_us_bonds_prices.npy')
+        my_path = Path(__file__).parent.parent.resolve()
+        us_bonds = np.load(str(my_path) + '/e_blackfire_capital_files/monthly_us_bonds_prices.npy')
         us_bonds = pd.DataFrame(us_bonds, columns=['date', 'bonds'])
-        us_bonds['date'] = pd.DatetimeIndex(us_bonds['date'])
+        us_bonds['date'] = pd.DatetimeIndex(us_bonds['date'].dt.strftime('%Y-%m-%d'))
         us_bonds.set_index('date', inplace=True)
         us_bonds.sort_index(inplace=True)
 
@@ -51,6 +53,9 @@ class DisplaysheetStatistics:
 
         # Strategy Monthly returns
         stats['return'] = cstat.strategy_returns(portfolio)
+
+        # print(stats['return'])
+        # return
 
         portfolio = pd.merge(stats['return'], us_bonds, left_index=True, right_index=True)
         portfolio = portfolio.astype(float)

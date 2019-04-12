@@ -72,6 +72,7 @@ def create_sharpe_ratio(returns, periods=252):
     def calculate_sharpe_ratio(rolling):
         try:
             return ((rolling['return'] - rolling['bonds']).mean())/rolling['return'].std()
+
         except:
             return None
 
@@ -80,9 +81,13 @@ def create_sharpe_ratio(returns, periods=252):
     tab.loc[:, 'return'] = (1 + returns.iloc[:, 0]) ** periods - 1
 
     # rolling
-    rolling_sharpe = roll(tab, periods).apply(calculate_sharpe_ratio)
+    # rolling_sharpe = roll(tab, periods).apply(calculate_sharpe_ratio)
+    rolling = tab.loc[:, 'return'].rolling(window=periods)
+    rolling_sharpe = np.sqrt(periods) * (
+            rolling.mean() / rolling.std()
+        )
 
-    sharpe = ((tab['return'] - tab['bonds']).mean())/tab['return'].std()
+    sharpe = tab['return'].mean()/tab['return'].std()
 
     return sharpe, rolling_sharpe
 
@@ -140,7 +145,6 @@ def rsquared(x, y):
 def turnover(returns):
     t = returns.groupby('date')['constituent'].apply(lambda x: set(x.values.tolist()))
     t = t.combine(t.shift(), lambda a, b: len(b - a) / len(b) if isinstance(b, set) else np.nan).dropna()
-    print(returns.groupby('date')['constituent'].count())
     return t.mean(), t
 
 
@@ -149,7 +153,6 @@ def strategy_returns(portfolio, methods='market_cap_weighted'):
     def calculate_return(group):
         return (group['weight'] * group['return']).sum() / group['weight'].sum()
 
-
     if methods == 'market_cap_weighted':
         portfolio.loc[:, 'weight'] = portfolio.loc[:, 'mc']
     elif methods == 'equal_weighted':
@@ -157,13 +160,12 @@ def strategy_returns(portfolio, methods='market_cap_weighted'):
     else:
         raise ValueError("methods must be market_cap_weighted or equal_weighted")
 
-    portfolio.loc[portfolio['position'] == 's', 'return'] = - 1 * portfolio.loc[portfolio['position'] == 's', 'return']
+    portfolio.loc[portfolio['position'] == 's', 'return'] *= - 1
     returns = portfolio[['constituent', 'weight', 'position', 'return']].groupby(portfolio.index).apply(
         calculate_return)
-
+    print(returns)
     # Shift for one month to get the actuals returns for the month, resample to add the missing month in case of no trades
-    t = pd.DataFrame(returns, columns=['return']).shift(1, 'M').resample('1M').fillna(method='bfill', limit=1).fillna(0)
-    t.index = t.index + pd.DateOffset(hours=16, minute=0, second=0)
+    t = pd.DataFrame(returns, columns=['return']).resample('1M').fillna(method='bfill', limit=1).fillna(0)
 
     return t
 

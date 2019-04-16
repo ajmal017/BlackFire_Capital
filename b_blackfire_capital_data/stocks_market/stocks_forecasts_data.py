@@ -152,6 +152,7 @@ def merge_stocks_forecast_info_with_gvkey(stocks_forecast_info_df: pd.DataFrame)
 
         return df[['gvkey', 'ibtic', 'cusip_8']]
 
+
     # Download stocks infos fron the mongo db
     client_db = motor.motor_tornado.MotorClient(CONNECTION_STRING)
     db = client_db[STOCKS_MARKET_DATA_DB_NAME][STOCKS_MARKET_DATA_INFOS_DB_COL_NAME]

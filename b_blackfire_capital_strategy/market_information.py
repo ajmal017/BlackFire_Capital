@@ -2,6 +2,7 @@ from a_blackfire_capital_class.displaysheet import DisplaySheetStatistics
 from a_blackfire_capital_class.useful_class import CustomMultiprocessing
 
 __author__ = 'pougomg'
+import wrds
 import numpy as np
 import pandas as pd
 from datetime import date
@@ -29,13 +30,15 @@ class MarketInformation:
                                     ascending=[True, True, True, True])\
                 .reset_index(drop=True)
             data['date'] = pd.DatetimeIndex(data['date'].dt.strftime('%Y-%m-%d'))
-            data = data[['date', 'eco zone', 'sector','gvkey', signal, 'ret', 'mc']]
+            data = data[['date', 'eco zone', 'sector','gvkey', 'isin_or_cusip', signal, 'ret', 'mc']]
             data.rename(columns={'ret': 'return'}, inplace=True)
 
         self._data = data
         self._signal = signal
         self._consider_history = consider_history
         self._percentile = kwargs.get('percentile', [i for i in np.linspace(0,1,11)])
+        self._index_filter = kwargs.get('index_filter', None)
+        self._stock_exchange_filter = kwargs.get('stock_exchange_filter', None)
 
     @staticmethod
     def _apply_z_score(identification, group):
@@ -148,6 +151,24 @@ class MarketInformation:
                                 "the best sectors in all the eco zone together."
             raise ValueError (error_description)
 
+        if self._index_filter:
+
+            db = wrds.Connection()
+            index_constituent = db.raw_sql("SELECT a.*, b.cusip, b.isin from compd.idxcst_his as a "
+                                           "INNER JOIN comp.security b ON (a.gvkey = b.gvkey AND a.iid = b.iid) "
+                                           "WHERE a.gvkeyx IN ('031855')" )
+            db.close()
+
+            index_constituent.loc[index_constituent['thru'].isna(), 'thru'] = date.today()
+            index_constituent.loc[index_constituent['cusip'].isna(), 'cusip'] = index_constituent.loc[:, 'isin']
+            index_constituent['to_merge'] = index_constituent['gvkey'] + '_' + index_constituent['cusip']
+
+            self._data['merge'] = self._data['gvkey'] + '_' + self._data['isin_or_cusip']
+            self._data = pd.merge(self._data, index_constituent[['from', 'thru', 'to_merge']], on=['to_merge'])
+
+            group = self._data.groupby(['isin_or_cusip'])
+
+
         if self._consider_history:
 
             result = self._data[['date', 'eco zone', 'sector', 'gvkey', self._signal]].set_index('date')
@@ -219,18 +240,54 @@ class MarketInformation:
                 raise ValueError()
 
             portfolio = pd.merge(self._data, signal, on=['date', 'eco zone', 'sector'])
-            portfolio.loc[:, 'position'] = None
-            portfolio.loc[portfolio['signal'].astype(int).isin(long_position), 'position'] = 'l'
-            portfolio.loc[portfolio['signal'].astype(int).isin(short_position), 'position'] = 's'
 
-            portfolio.dropna(subset=['position'], inplace=True)
-            portfolio.set_index('date', inplace=True)
-            portfolio.to_excel('test.xlsx')
+        elif self._data_source == STOCKS_MARKET_DATA_DB_NAME:
 
-            header = ['group', 'constituent', 'return', 'mc', 'position']
-            stat = DisplaySheetStatistics(portfolio[header], title, description)
-            # stat.get_results()
-            stat.plot_results()
+            eco_zone = kwargs.get('eco_zone', None)
+            sector = kwargs.get('sector', None)
+
+            if eco_zone is not None and sector is not None:
+                self._data = self._data[(self._data['eco zone'] == eco_zone) &
+                                        (self._data['sector'] == sector)]
+                signal = self.get_signal_for_strategy(1)
+                signal['date'] = signal['date'] + pd.DateOffset(months=1)
+                signal['group'] = signal['sector']
+                signal['constituent'] = signal['gvkey']
+
+            elif eco_zone is not None and sector is None:
+                self._data = self._data[self._data['eco zone'] == eco_zone]
+                signal = self.get_signal_for_strategy(2)
+                signal['date'] = signal['date'] + pd.DateOffset(months=1)
+                signal['group'] = signal['eco zone']
+                signal['constituent'] = signal['gvkey']
+
+            elif eco_zone is None and sector is not None:
+                self._data = self._data[self._data['sector'] == sector]
+                signal = self.get_signal_for_strategy(3)
+                signal['date'] = signal['date'] + pd.DateOffset(months=1)
+                signal['group'] = signal['sector']
+                signal['constituent'] = signal['gvkey']
+
+            else:
+                signal = self.get_signal_for_strategy(4)
+                signal['date'] = signal['date'] + pd.DateOffset(months=1)
+                signal['group'] = 'ALL'
+                signal['constituent'] = signal['gvkey']
+
+            portfolio = pd.merge(self._data, signal, on=['date', 'eco zone', 'sector', 'gvkey'])
+
+
+        portfolio.loc[:, 'position'] = None
+        portfolio.loc[portfolio['signal'].astype(int).isin(long_position), 'position'] = 'l'
+        portfolio.loc[portfolio['signal'].astype(int).isin(short_position), 'position'] = 's'
+
+        portfolio.dropna(subset=['position'], inplace=True)
+        portfolio.set_index('date', inplace=True)
+        portfolio.to_excel('test.xlsx')
+
+        header = ['group', 'constituent', 'return', 'mc', 'position']
+        stat = DisplaySheetStatistics(portfolio[header], 'USD', '')
+        stat.plot_results()
 
 
 
@@ -249,6 +306,8 @@ if __name__ == '__main__':
 
     stocks = np.load('usa_summary_stocks.npy').item()
     stocks = pd.DataFrame(stocks['data'], columns=stocks['header'])
-    print(stocks.columns)
+    # print(stocks.columns)
 
-    MarketInformation(stocks, STOCKS_MARKET_DATA_DB_NAME, 'rec', True)._get_stocks_strategy(1)
+    MarketInformation(stocks, STOCKS_MARKET_DATA_DB_NAME, 'pt_ret', True).\
+        get_strategy_statistics(long_position=[10, 9, 8], short_position=[None], eco_zone='USD',
+                                sector='444')

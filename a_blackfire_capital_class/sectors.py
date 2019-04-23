@@ -2,6 +2,7 @@ import time
 import motor
 import tornado
 import numpy as np
+import wrds
 import pandas as pd
 from pathlib import Path
 from datetime import date
@@ -360,7 +361,7 @@ class Sectors:
     def get_monthly_stocks_summary_with_eco_zone_and_sector_from_mongodb(self, start_date: date,
                                                                          end_date: date,
                                                                          query_sector_mapping: dict,
-                                                                         to_display: dict) -> pd.DataFrame:
+                                                                         to_display: dict, **kwargs) -> pd.DataFrame:
 
         """
         Description:
@@ -412,7 +413,13 @@ class Sectors:
         mapping = self.get_sectors_mapping_from_db(query=query_sector_mapping, to_display=to_display)
 
         print("\n########### Downloading monthly stocks summary from mongo DB. ###########")
-        m_summary = Stocks(self._connection_string).get_monthly_summary_from_mongodb(start_date, end_date, {}, None)
+        index_filter = kwargs.get('index_filter', ['000003', '150927', '150916', '118341', '151013',
+                                                   '151012', '150915'])
+        stock_exchange_filter = kwargs.get('stock_exchange_filter', None)
+        m_summary = Stocks(self._connection_string).get_monthly_summary_from_mongodb(start_date, end_date, {}, None,
+                                                                                     index_filter=index_filter,
+                                                                                     stock_exchange_filter=
+                                                                                     stock_exchange_filter)
         m_summary.reset_index(drop=True, inplace=True)
 
         # map summary data and mapping.
@@ -814,9 +821,18 @@ class Sectors:
 
 
 if __name__ == '__main__':
+    index_filter_sp_all = ['031855', '150927', '151015', '000010', '153376', '151012', '150915', '150916']
+    result = Sectors(by=NAICS, connection_string=PROD_CONNECTION_STRING).\
+        get_monthly_stocks_summary_with_eco_zone_and_sector_from_mongodb(start_date=date(1999, 1, 1),
+                                                                         end_date=date(2017, 12, 31),
+                                                                         query_sector_mapping={'level': '2'},
+                                                                         to_display=None)
+    print(result)
+    path = 'C:/Users/Ghislain/Google Drive/BlackFire Capital/Data/'
+    d = dict()
+    d['data'] = result
+    d['header'] = result.columns
+    np.save(path + 'S&P Global 1200.npy', d)
+    # result.to_excel('test_.xlsx')
 
-    # Sectors(by=NAICS, connection_string=PROD_CONNECTION_STRING).save_sectors_mapping_in_mongodb()
-    print(Sectors(by=NAICS, connection_string=PROD_CONNECTION_STRING).
-          get_monthly_stocks_summary_with_eco_zone_and_sector_from_mongodb(start_date=date(2017, 1, 1), end_date=date(2017, 12, 31),
-                                                      query_sector_mapping={'eco zone': 'USD', 'level': '2'},
-                                                      to_display=None))
+

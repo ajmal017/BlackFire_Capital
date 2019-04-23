@@ -38,7 +38,7 @@ ECONOMICS_ZONES_DB_COL_NAME = 'infos'
 
 COUNTRY_ZONE_AND_EXCHG = [['canada','CAN','CAD','7'], ['united states','USA','USD','11','12','14','17'],
            ['austria', 'AUT', 'EUR', '150', '273'],
-           ['belgium','BEL', 'EUR', '132', '150', '161', '188', '285', '294'],
+           ['belgium', 'BEL', 'EUR', '132', '150', '161', '188', '285', '294'],
            ['denmark', 'DNK', 'DKK', '305', '144'],
            ['finland', 'FIN', 'EUR', '167', '286'],
            ['france', 'FRA', 'EUR', '286', '294', '121', '150', '190', '199', '205', '206', '216', '217', '231'],

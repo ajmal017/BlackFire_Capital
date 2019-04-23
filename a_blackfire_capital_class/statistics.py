@@ -163,7 +163,6 @@ def strategy_returns(portfolio, methods='market_cap_weighted'):
     portfolio.loc[portfolio['position'] == 's', 'return'] *= - 1
     returns = portfolio[['constituent', 'weight', 'position', 'return']].groupby(portfolio.index).apply(
         calculate_return)
-    print(returns)
     # Shift for one month to get the actuals returns for the month, resample to add the missing month in case of no trades
     t = pd.DataFrame(returns, columns=['return']).resample('1M').fillna(method='bfill', limit=1).fillna(0)
 

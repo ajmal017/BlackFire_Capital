@@ -43,7 +43,7 @@ class MarketInformation:
         if data_source == SECTORS_MARKET_DATA_DB_NAME:
             data = data.sort_values(['eco zone', 'sector', 'date'], ascending=[True, True, True])\
                 .reset_index(drop=True)
-            data['date'] = pd.DatetimeIndex(data['date'].dt.strftime('%Y-%m-%d'))
+            data['date'] = pd.DatetimeIndex(data['date'].dt.strftime('%Y-%m-%d')) + pd.offsets(0)
             data = data[['date', 'eco zone', 'sector', signal, 'ret', 'mc']]
             data.rename(columns={'ret': 'return'}, inplace=True)
 
@@ -249,7 +249,6 @@ class MarketInformation:
             result.reset_index(inplace=True)
             result.dropna(subset=['signal'], inplace=True)
 
-            print(result)
 
             data = pd.merge(self._data[['date', 'eco zone', 'sector', 'isin_or_cusip', self._signal]],
                             result,
@@ -337,18 +336,19 @@ class MarketInformation:
 
             else:
                 signal = self.get_signal_for_strategy(4)
-                signal['date'] = signal['date'] + pd.DateOffset(months=1)
+                signal['date'] = signal.set_index('date').shift(periods=1, freq='M').index
                 signal['group'] = 'ALL'
                 signal['constituent'] = signal['isin_or_cusip']
 
             portfolio = pd.merge(self._data, signal, on=['date', 'eco zone', 'sector', 'isin_or_cusip'])
 
+        # print(portfolio['date'])
         portfolio.loc[:, 'position'] = None
         portfolio.loc[portfolio['signal'].astype(int).isin(long_position), 'position'] = 'l'
         portfolio.loc[portfolio['signal'].astype(int).isin(short_position), 'position'] = 's'
 
         portfolio.dropna(subset=['position'], inplace=True)
-        portfolio.groupby('date')[['return']].mean().to_excel('test.xlsx')
+        portfolio = portfolio[portfolio['date'] > date(2009, 2, 28)]
         portfolio.set_index('date', inplace=True)
 
         header = ['group', 'constituent', 'return', 'mc', 'position']
@@ -361,9 +361,10 @@ if __name__ == '__main__':
     # sector = np.load('usa_summary_sectors.npy').item()
     # sector = pd.DataFrame(sector['data'], columns=sector['header'])
     # print(sector.columns)
-    path = 'C:/Users/Ghislain/Google Drive/BlackFire Capital/Data/'
-    stocks = np.load(path + 'S&P Global 1200.npy').item()
+    # path = 'C:/Users/Ghislain/Google Drive/BlackFire Capital/Data/'
+    stocks = np.load('S&P Global 1200.npy').item()
     stocks = pd.DataFrame(stocks['data'], columns=stocks['header'])
+    print(stocks.groupby('date').count().mean())
     # print(stocks.columns)
     # MarketInformation(stocks, STOCKS_MARKET_DATA_DB_NAME, 'pt_ret', True,
     #                   index_filter=['031855'])._get_stocks_strategy(1)
@@ -371,5 +372,5 @@ if __name__ == '__main__':
     index_filter = ['031855', '150927', '151015', '000010', '153376', '151012', '150915', '150916']
 
     MarketInformation(stocks, STOCKS_MARKET_DATA_DB_NAME, 'pt_ret', True). \
-        get_strategy_statistics(long_position=[10], short_position=[None], eco_zone='USD',
+        get_strategy_statistics(long_position=[2], short_position=[None], eco_zone='USD',
                                 sector=None)

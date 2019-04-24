@@ -205,7 +205,8 @@ class MarketInformation:
             data['signal'] = data[self._signal]
             data.dropna(subset=['signal'], inplace=True)
 
-        group = data.groupby(d_strategy[strategy])
+        # group = data.groupby(d_strategy[strategy])
+        group = data.groupby(['sector', 'date'])
         tab_parameter = [(data, 'signal', self._percentile) for name, data in group]
         result = CustomMultiprocessing().exec_in_parallel(tab_parameter, self._apply_ranking)
 
@@ -294,7 +295,8 @@ class MarketInformation:
         portfolio.loc[portfolio['signal'].astype(int).isin(short_position), 'position'] = 's'
 
         portfolio.dropna(subset=['position'], inplace=True)
-        portfolio = portfolio[portfolio['date'] > date(2009, 2, 28)]
+        # portfolio = portfolio[portfolio['date'] > date(2009, 2, 28)]
+        portfolio.groupby(['date']).count()[['isin_or_cusip']].to_excel('test.xlsx')
         portfolio.set_index('date', inplace=True)
 
         header = ['group', 'constituent', 'return', 'mc', 'position']
@@ -307,19 +309,22 @@ if __name__ == '__main__':
     # sector = np.load('usa_summary_sectors.npy').item()
     # sector = pd.DataFrame(sector['data'], columns=sector['header'])
     # print(sector.columns)
-    path = 'C:/Users/Ghislain/Google Drive/BlackFire Capital/Data/'
+    # path = 'C:/Users/Ghislain/Google Drive/BlackFire Capital/Data/'
+    path = ''
+
     stocks = np.load(path + 'S&P Global 1200.npy').item()
     stocks = pd.DataFrame(stocks['data'], columns=stocks['header'])
 
     custom_sector = MiscellaneousFunctions().get_custom_group_for_io()
 
     stocks = pd.merge(stocks, custom_sector[['sector', 'group']], on='sector')
+    stocks.groupby(['date', 'group']).count()[['isin_or_cusip']].to_excel('test.xlsx')
     # print(stocks.columns)
     # MarketInformation(stocks, STOCKS_MARKET_DATA_DB_NAME, 'pt_ret', True,
     #                   index_filter=['031855'])._get_stocks_strategy(1)
 
     index_filter = ['031855', '150927', '151015', '000010', '153376', '151012', '150915', '150916']
 
-    # MarketInformation(stocks, STOCKS_MARKET_DATA_DB_NAME, 'pt_ret', True). \
-    #     get_strategy_statistics(long_position=[2], short_position=[None], eco_zone='USD',
-    #                             sector=None)
+    MarketInformation(stocks, STOCKS_MARKET_DATA_DB_NAME, 'pt_ret', True). \
+        get_strategy_statistics(long_position=[9], short_position=[2], eco_zone=None,
+                                sector=None)

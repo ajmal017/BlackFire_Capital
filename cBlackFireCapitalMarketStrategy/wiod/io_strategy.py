@@ -1,26 +1,80 @@
-from pathlib import Path
 import pandas as pd
 import numpy as np
-# import unidecode
-# word = unidecode.unidecode(word)
+from pathlib import Path
 from unicodedata import normalize
 
 
+def ds_using_builtin_set_type(edges, vertices):
+
+    # given an element, create a set with only this element as member
+    def MAKE_SET(v):
+        return frozenset([v])
+
+    # create big set of sets
+    sets = set([MAKE_SET(v) for v in vertices])
+
+    # find a set containing element x in a list of all sets
+    def FIND_SET(x):
+        for subset in sets:
+            if x in subset:
+                return subset
+
+    # create a combined set containing all elements of both sets, destroy original sets
+    def UNION(set_u, set_v):
+        sets.add(frozenset.union(set_u, set_v))
+        sets.remove(set_u)
+        sets.remove(set_v)
+
+    # main algorithm: find all connected components
+    for (u, v) in edges:
+        set_u = FIND_SET(u)
+        set_v = FIND_SET(v)
+
+        if set_u != set_v:
+            UNION(set_u, set_v)
+
+    return sets
+
+
 def convert_wiod_code_to_bea_naics():
+
+    def get_translations_wiod_code_to_bea_naics(naics):
+        return normalize('NFKD', naics).replace(' ', '')
+
     my_path = Path(__file__).parent.parent.parent.resolve()
-    my_path = str(my_path) + '/eBlackFireCapitalFiles/'
+    my_path = str(my_path) + '/e_blackfire_capital_files/'
     df = pd.read_excel(str(my_path) + 'wiod_code_to_bea_naics.xlsx', sheet_name='convert', index_col=None)
     df = df[['NAICS code', 'NACE code', 'Industries in WIOT SUTs']]
     df = df.fillna(method='ffill')
+    df.drop_duplicates(subset=['NAICS code', 'NACE code', 'Industries in WIOT SUTs'], inplace=True)
     df = df.astype(str)
-    d = dict()
+    df.loc[:, 'NAICS code'] = df.apply(lambda x: get_translations_wiod_code_to_bea_naics(x['NAICS code']), axis=1)
 
-    def get_translations_wiod_code_to_bea_naics(naics, nace):
-        d[nace] = normalize('NFKD', naics).replace(' ', '')
+    vertices = df['NAICS code'].unique().tolist() + df['NACE code'].unique().tolist()
+    edges = [(naics, nace) for naics, nace in df[['NAICS code', 'NACE code']].values.tolist()]
+    sets = ds_using_builtin_set_type(edges, vertices)
+    df.loc[:, 'group'] = None
+    for s in sets:
+        for value in s:
+            mask = (df.loc[:, 'NAICS code'] == value) | (df.loc[:, 'NACE code'] == value)
+            df.loc[mask, 'group'] = s
 
-    df.apply(lambda x: get_translations_wiod_code_to_bea_naics(x['NAICS code'], x['NACE code']), axis=1)
+    return df
 
-    return d
+
+def mapping_bea_and_naics():
+
+    my_path = Path(__file__).parent.parent.parent.resolve()
+    my_path = str(my_path) + '/e_blackfire_capital_files/'
+    df = pd.read_excel(str(my_path) + 'wiod_code_to_bea_naics.xlsx', sheet_name='naics', index_col=None)
+    df = df[['Summary', 'Detail']]
+    df = df.fillna(method='ffill')
+    df = df.astype(str)
+    df.loc[:, 'sector'] = df['Detail'].str[:3]
+    df.drop_duplicates(subset=['Summary', 'sector'], inplace=True)
+    df.rename(columns={'Summary': 'bea_sector'}, inplace=True)
+
+    return df
 
 
 def convert_naics_to_bea_naics():
@@ -89,7 +143,7 @@ if __name__ == "__main__":
 
     # my_path = Path(__file__).parent.parent.parent.resolve()
     # print(my_path)
-    wiod_to_naics = convert_wiod_code_to_bea_naics()
-    niot_matrix = import_wiod_table(wiod_to_naics)
-    return_leontief_matrix(niot_matrix)
+    wiod_to_naics = mapping_bea_and_naics()
+    # niot_matrix = import_wiod_table(wiod_to_naics)
+    # return_leontief_matrix(niot_matrix)
     # convert_naics_to_bea_naics()

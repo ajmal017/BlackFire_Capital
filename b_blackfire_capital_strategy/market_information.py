@@ -1,5 +1,5 @@
 from a_blackfire_capital_class.displaysheet import DisplaySheetStatistics
-from a_blackfire_capital_class.useful_class import CustomMultiprocessing
+from a_blackfire_capital_class.useful_class import CustomMultiprocessing, MiscellaneousFunctions
 
 __author__ = 'pougomg'
 import wrds
@@ -129,59 +129,6 @@ class MarketInformation:
 
         return group
 
-    @staticmethod
-    def _filter_index_date(group: pd.DataFrame, period_index: pd.DataFrame):
-
-        """
-        Description:
-        -----------
-
-        This function is used to filter the date range where the stocks is in the indexes.
-
-        Parameter:
-        ----------
-
-        :param group: historical data of the stocks
-        :param period_index: dataFrame of the period where the stocks is in the indexes.
-
-        Return:
-        ------
-
-        :return: DataFrame of the data filters.
-        """
-        range_list = period_index[['from', 'thru']].values.tolist()
-        mask = (group['date'].between(range_list[0][0], range_list[0][1]))
-        for value in range_list:
-            mask = mask | (group['date'].between(value[0], value[1]))
-
-        return group[mask]
-
-    def _filter_stocks_by_stock_exchange(self):
-
-        """
-        Description:
-        ------------
-
-        This function is used to filter the stocks, to be in a particular index.
-
-        :return:
-        """
-        stock_exchange_list = "'" + "','".join(self._stock_exchange_filter) + "'"
-
-        db = wrds.Connection()
-        stock_exchange_constituent = db.raw_sql("SELECT gvkey, isin, cusip, exchg FROM comp.security WHERE"
-                                                " exchg IN (" + stock_exchange_list + ") UNION "
-                                                "SELECT gvkey, isin, cusip, exchg FROM comp.g_security "
-                                                "WHERE exchg IN (" + stock_exchange_list + ")")
-        db.close()
-
-        stock_exchange_constituent.loc[stock_exchange_constituent['cusip'].isna(), 'cusip'] = \
-            stock_exchange_constituent.loc[:, 'isin']
-        stock_exchange_constituent['to_merge'] = stock_exchange_constituent.loc[:, 'cusip']
-
-        self._data['to_merge'] = self._data['isin_or_cusip']
-        self._data = pd.merge(self._data, stock_exchange_constituent[['to_merge', 'exchg']], on=['to_merge'])
-
     def _get_sector_strategy(self, strategy):
 
         if strategy == 1:
@@ -248,7 +195,6 @@ class MarketInformation:
             result.rename(columns={self._signal: 'signal'}, inplace=True)
             result.reset_index(inplace=True)
             result.dropna(subset=['signal'], inplace=True)
-
 
             data = pd.merge(self._data[['date', 'eco zone', 'sector', 'isin_or_cusip', self._signal]],
                             result,
@@ -361,16 +307,19 @@ if __name__ == '__main__':
     # sector = np.load('usa_summary_sectors.npy').item()
     # sector = pd.DataFrame(sector['data'], columns=sector['header'])
     # print(sector.columns)
-    # path = 'C:/Users/Ghislain/Google Drive/BlackFire Capital/Data/'
-    stocks = np.load('S&P Global 1200.npy').item()
+    path = 'C:/Users/Ghislain/Google Drive/BlackFire Capital/Data/'
+    stocks = np.load(path + 'S&P Global 1200.npy').item()
     stocks = pd.DataFrame(stocks['data'], columns=stocks['header'])
-    print(stocks.groupby('date').count().mean())
+
+    custom_sector = MiscellaneousFunctions().get_custom_group_for_io()
+
+    stocks = pd.merge(stocks, custom_sector[['sector', 'group']], on='sector')
     # print(stocks.columns)
     # MarketInformation(stocks, STOCKS_MARKET_DATA_DB_NAME, 'pt_ret', True,
     #                   index_filter=['031855'])._get_stocks_strategy(1)
 
     index_filter = ['031855', '150927', '151015', '000010', '153376', '151012', '150915', '150916']
 
-    MarketInformation(stocks, STOCKS_MARKET_DATA_DB_NAME, 'pt_ret', True). \
-        get_strategy_statistics(long_position=[2], short_position=[None], eco_zone='USD',
-                                sector=None)
+    # MarketInformation(stocks, STOCKS_MARKET_DATA_DB_NAME, 'pt_ret', True). \
+    #     get_strategy_statistics(long_position=[2], short_position=[None], eco_zone='USD',
+    #                             sector=None)

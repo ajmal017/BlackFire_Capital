@@ -55,6 +55,7 @@ class MarketInformation:
             data.rename(columns={'ret': 'return'}, inplace=True)
 
         self._data = data
+        # self._benchmark = data[['date', 'mc',]]
         self._signal = signal
         self._consider_history = consider_history
         self._percentile = kwargs.get('percentile', [i for i in np.linspace(0, 1, 11)])
@@ -288,15 +289,27 @@ class MarketInformation:
                 signal['constituent'] = signal['isin_or_cusip']
 
             portfolio = pd.merge(self._data, signal, on=['date', 'eco zone', 'sector', 'isin_or_cusip'])
+            portfolio.set_index('date', inplace=True)
+            # portfolio.to_excel('test.xlsx')
 
+            mc_s = portfolio[['mc', 'isin_or_cusip']].shift(periods=1, freq='M')
+            portfolio.drop('mc', axis=1, inplace=True)
+            portfolio = pd.merge(portfolio.reset_index(),
+                                 mc_s.reset_index(),
+                                 on=['date', 'isin_or_cusip'],
+                                 how='left')
+
+            # portfolio.to_excel('test_.xlsx')
+            # print(a.shape)
+        # return
         # print(portfolio['date'])
         portfolio.loc[:, 'position'] = None
         portfolio.loc[portfolio['signal'].astype(int).isin(long_position), 'position'] = 'l'
         portfolio.loc[portfolio['signal'].astype(int).isin(short_position), 'position'] = 's'
 
         portfolio.dropna(subset=['position'], inplace=True)
-        # portfolio = portfolio[portfolio['date'] > date(2009, 2, 28)]
-        portfolio.groupby(['date']).count()[['isin_or_cusip']].to_excel('test.xlsx')
+        portfolio = portfolio[portfolio['date'] > date(2009, 2, 28)]
+        # portfolio.groupby(['date']).count()[['isin_or_cusip']].to_excel('test.xlsx')
         portfolio.set_index('date', inplace=True)
 
         header = ['group', 'constituent', 'return', 'mc', 'position']
@@ -325,6 +338,6 @@ if __name__ == '__main__':
 
     index_filter = ['031855', '150927', '151015', '000010', '153376', '151012', '150915', '150916']
 
-    MarketInformation(stocks, STOCKS_MARKET_DATA_DB_NAME, 'pt_ret', True). \
-        get_strategy_statistics(long_position=[9], short_position=[2], eco_zone=None,
+    MarketInformation(stocks, STOCKS_MARKET_DATA_DB_NAME, 'rec', True). \
+        get_strategy_statistics(long_position=[10], short_position=[None], eco_zone=None,
                                 sector=None)

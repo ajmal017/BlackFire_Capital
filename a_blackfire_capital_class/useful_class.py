@@ -192,9 +192,64 @@ class MiscellaneousFunctions:
 
     def get_custom_group_for_io(self):
 
+        my_path = Path(__file__).parent.parent.resolve()
+        my_path = str(my_path) + '/e_blackfire_capital_files/'
+        custom_group = pd.read_excel(my_path + 'nace_to_bea_mapping.xlsx', sheet_name='mapping', index_col=None)
+
         bea_and_naics = self.map_bea_and_naics()
-        custom_group = self.convert_wiod_code_to_bea_naics()
         custom_group = pd.merge(custom_group.drop_duplicates(subset=['bea_sector']),
                                 bea_and_naics.drop_duplicates(subset=['sector']),
-                                on=['bea_sector'])
+                                on=['bea_sector'], how='left')
         return custom_group
+
+    def get_wiod_table(self):
+
+
+        my_path = Path(__file__).parent.parent.resolve()
+        my_path = str(my_path) + '/e_blackfire_capital_files/'
+        data = pd.read_excel(my_path + 'niot usa.xlsx', sheet_name='National IO-tables', index_col=None)
+
+        nace_group = self.get_custom_group_for_io()
+        nace_group = nace_group.drop_duplicates(['nace_sector'])[['nace_sector', 'group']].set_index('nace_sector')
+        wiod_to_naics = nace_group.to_dict()
+
+        # Replace WIOT codes by BEA NAICS
+        data.loc[:, 'Code'] = data['Code'].replace(wiod_to_naics['group'])
+        data.rename(columns=wiod_to_naics['group'], inplace=True)
+        data = data[(data['Year'].isna() == False)].reset_index(drop=True)
+
+        # group columns by bea naics and apply the sum
+        data = data.groupby(data.columns, axis=1).sum()
+        data = data.groupby(['Year','Origin', 'Code']).sum().reset_index()
+
+        # Calculate finals demands
+        data.loc[:, 'FD'] = data[['CONS_h', 'CONS_np', 'CONS_g', 'GFCF', 'INVEN', 'EXP']].sum(axis=1)
+
+        return data
+
+
+    def return_leontief_matrix(niot_matrix):
+
+        header = ['Year', 'Code', 'Origin', '111CA', '113FF', '213', '22', '23', '311FT', '315AL', '321', '322', '323',
+                  '324', '325', '326', '327', '331', '332', '333', '334', '335', '3361MV', '3364OT', '339', '42', '481',
+                  '483', '486', '487OS', '493', '4A0', '511', '513', '521CI', '523', '525', '5412OP', '5415', '55', '61',
+                  '722', '81', 'D35', 'GSLE', 'N', 'ORE', 'Q', 'R_S', 'Used']
+
+        def get_leontief_matrix(group, header):
+
+            new_header = header[:]
+            new_header.remove('Year')
+            new_header.remove('Code')
+            new_header.remove('Origin')
+
+            total = group[group['Code'] == 'GO'][new_header].values[0]
+            group = np.identity(len(new_header)) - group[group['Code'].isin(new_header)][new_header]/total
+            group = np.linalg.inv(group)
+
+            return pd.DataFrame(group, new_header, new_header)
+
+        niot_matrix = niot_matrix[niot_matrix['Origin'].isin(['Domestic', 'TOT'])][header]
+        niot_matrix.groupby(['Year']).apply(get_leontief_matrix, header).to_excel('leontief.xlsx')
+g = MiscellaneousFunctions().import_wiod_table()
+
+# g.drop_duplicates(['nace_sector']).to_excel('test_.xlsx')

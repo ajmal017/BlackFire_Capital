@@ -642,6 +642,76 @@ class Sectors:
 
         return sector_m_summary
 
+    def compute_monthly_sectors_summary(self, m_summary: pd.DataFrame) -> pd.DataFrame:
+        """
+        Description:
+        ------------
+        This function is used to download the stocks summary and aggregate that at the sectors level.
+
+        Parameter:
+        ----------
+
+        :param start_date: begin date
+        :param end_date: end date
+
+        Usage:
+        -----
+        m_summary = Sectors(by=NAICS, connection_string=PROD_CONNECTION_STRING).download_monthly_sectors_summary(
+                    date(2017, 1, 1), date(2017, 12, 31))
+
+        m_summary.head(15)
+
+                       mc         vol    npt  ...    sector                date  level
+        0   1.968753e+09         0.0   20.0  ...        11 2017-12-31 16:00:00      1
+        1   1.013969e+09         0.0   12.0  ...       111 2017-12-31 16:00:00      2
+        2   6.009197e+07         0.0    3.0  ...       112 2017-12-31 16:00:00      2
+        3   9.498733e+07         0.0    0.0  ...       113 2017-12-31 16:00:00      2
+        4   9.012113e+06         0.0    0.0  ...       114 2017-12-31 16:00:00      2
+        5   7.906921e+08         0.0    5.0  ...       115 2017-12-31 16:00:00      2
+        6   3.854586e+11  55423664.0  516.0  ...        21 2017-12-31 16:00:00      1
+        7   3.830703e+10         0.0   59.0  ...       211 2017-12-31 16:00:00      2
+        8   3.425986e+11  55423664.0  441.0  ...       212 2017-12-31 16:00:00      2
+        9   4.545411e+09         0.0   16.0  ...       213 2017-12-31 16:00:00      2
+        10  2.371846e+10         0.0   43.0  ...        22 2017-12-31 16:00:00      1
+        11  2.371846e+10         0.0   43.0  ...       221 2017-12-31 16:00:00      2
+        12  5.680426e+09         0.0   31.0  ...        23 2017-12-31 16:00:00      1
+        13  3.948956e+08         0.0    3.0  ...       236 2017-12-31 16:00:00      2
+        14  4.003965e+09         0.0   21.0  ...       237 2017-12-31 16:00:00      2
+        ...
+
+        Return:
+        -------
+
+        :return: DataFrame of sectors summary information.
+        :rtype: pd.DataFrame.
+        """
+
+        # shift market cap
+        print("\n########### shifting market cap for 1 month. ###########")
+        group = m_summary[['date', 'isin_or_cusip', 'mc']].groupby(['isin_or_cusip'])
+        tab_parameter = [(data,) for name, data in group]
+        result = CustomMultiprocessing().exec_in_parallel(tab_parameter, self._shift_mc)
+        result.rename(columns={'mc': 'mc_s'}, inplace=True)
+        m_summary = pd.merge(m_summary, result, left_on=m_summary.index, right_on=result.index, how='inner')
+
+        # calculate sector summary
+        print("\n########### Compute sector summary ###########")
+        header = ['date', 'sector', 'eco zone', 'mc', 'vol', 'npt', 'npptvar', 'nptvar', 'nrec', 'nrcvar',
+                  'pt_ret', 'pptvar', 'ptvar', 'ret', 'rcvar', 'rec', 'mc_s']
+        sector_m_summary = []
+        for zone in m_summary['eco zone'].unique():
+            data = m_summary[m_summary['eco zone'] == zone]
+            group = data[header].groupby(['eco zone', 'sector', 'date'])
+            tab_parameter = [(name, data) for name, data in group]
+            result = CustomMultiprocessing().exec_in_parallel(tab_parameter, self._compute_sector_summary)
+            result.dropna(subset=['ret'], inplace=True)
+            sector_m_summary.append(result)
+            print('Done for economics zone: {}'.format(zone))
+
+        sector_m_summary = pd.concat(sector_m_summary, ignore_index=True)
+
+        return sector_m_summary
+
     def save_monthly_sectors_summary(self, start_date: date, end_date: date) -> pd.DataFrame:
 
         """

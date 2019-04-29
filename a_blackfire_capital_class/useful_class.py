@@ -3,6 +3,7 @@ import time
 import multiprocessing
 from typing import Callable, Tuple, Union
 import pandas as pd
+import numpy as np
 import sys
 import smtplib, ssl
 from pathlib import Path
@@ -117,42 +118,72 @@ class SendSimulationState:
 class MiscellaneousFunctions:
 
     @staticmethod
-    def _ds_using_builtin_set_type(edges, vertices):
+    def _ds_using_builtin_set_type(edges: list, vertices: list) -> set:
+        """
+        Description:
+        ------------
 
+        This function is used to find all the independents  subsets between two sets. It's returns
+        the group of subsets with their constituents.
+
+        Parameter:
+        ----------
+
+        :param edges: list of Tuple of relation between the elements in sets. Ex: [('111F', 'M27')]
+        :param vertices: list of all elements in the sets. Ex: ['111F', 'M27']
+
+        Return:
+        -------
+
+        :return: sets of uniques subsets.
+        """
         # given an element, create a set with only this element as member
-        def MAKE_SET(v):
+        def make_set(v):
             return frozenset([v])
 
         # create big set of sets
-        sets = set([MAKE_SET(v) for v in vertices])
+        sets = set([make_set(v) for v in vertices])
 
         # find a set containing element x in a list of all sets
-        def FIND_SET(x):
+        def find_set(x):
             for subset in sets:
                 if x in subset:
                     return subset
 
         # create a combined set containing all elements of both sets, destroy original sets
-        def UNION(set_u, set_v):
+        def union(set_u, set_v):
             sets.add(frozenset.union(set_u, set_v))
             sets.remove(set_u)
             sets.remove(set_v)
 
         # main algorithm: find all connected components
         for (u, v) in edges:
-            set_u = FIND_SET(u)
-            set_v = FIND_SET(v)
+            set_u = find_set(u)
+            set_v = find_set(v)
 
             if set_u != set_v:
-                UNION(set_u, set_v)
+                union(set_u, set_v)
 
         return sets
 
-    def convert_wiod_code_to_bea_naics(self):
+    def convert_wiod_code_to_bea_naics(self) -> pd.DataFrame:
+        """
+        Description:
+        ------------
+
+        This function is used to map NACE code and NAICS code.
+
+        Return:
+        ------
+
+        :return:  DataFrame of mapping between NACE code and BEA code. The columns group is add to
+        group the multiple relations between NACE and BEA into 1 to 1 set.
+        """
 
         def get_translations_wiod_code_to_bea_naics(naics):
             return normalize('NFKD', naics).replace(' ', '')
 
+        # Open excel files containing the informations.
         my_path = Path(__file__).parent.parent.resolve()
         my_path = str(my_path) + '/e_blackfire_capital_files/'
         df = pd.read_excel(str(my_path) + 'wiod_code_to_bea_naics.xlsx', sheet_name='convert', index_col=None)
@@ -162,6 +193,7 @@ class MiscellaneousFunctions:
         df = df.astype(str)
         df.loc[:, 'NAICS code'] = df.apply(lambda x: get_translations_wiod_code_to_bea_naics(x['NAICS code']), axis=1)
 
+        # Transform the mapping into 1 to 1 set.
         vertices = df['NAICS code'].unique().tolist() + df['NACE code'].unique().tolist()
         edges = [(naics, nace) for naics, nace in df[['NAICS code', 'NACE code']].values.tolist()]
         sets = self._ds_using_builtin_set_type(edges, vertices)
@@ -176,7 +208,19 @@ class MiscellaneousFunctions:
         return df
 
     @staticmethod
-    def map_bea_and_naics():
+    def map_bea_and_naics() -> pd.DataFrame:
+
+        """
+        Description:
+        ------------
+
+        This function is used to map BEA Code with the NAICS.
+
+        Return:
+        -------
+
+        :return: DataFrame of mapping between NAICS and BEA code.
+        """
 
         my_path = Path(__file__).parent.parent.resolve()
         my_path = str(my_path) + '/e_blackfire_capital_files/'
@@ -190,20 +234,42 @@ class MiscellaneousFunctions:
 
         return df
 
-    def get_custom_group_for_io(self):
+    def get_custom_group_for_io(self) -> pd.DataFrame:
+
+        """
+        Description:
+        ------------
+
+        This function returns a dataFrame with a mapping between NACE code, BEA code and NAICS.
+        Thus the columns group give a custom clustering to group the informations for later work
+        in the IO tables.
+
+        Return:
+        -------
+
+        :return: DataFrame of mapping NACE code, BEA code and NAICS.
+        """
 
         my_path = Path(__file__).parent.parent.resolve()
         my_path = str(my_path) + '/e_blackfire_capital_files/'
         custom_group = pd.read_excel(my_path + 'nace_to_bea_mapping.xlsx', sheet_name='mapping', index_col=None)
-
         bea_and_naics = self.map_bea_and_naics()
-        custom_group = pd.merge(custom_group.drop_duplicates(subset=['bea_sector']),
-                                bea_and_naics.drop_duplicates(subset=['sector']),
-                                on=['bea_sector'], how='left')
+
+        custom_group = pd.merge(custom_group, bea_and_naics, on=['bea_sector'], how='left')
+
         return custom_group
 
-    def get_wiod_table(self):
+    def get_wiod_table(self) -> pd.DataFrame:
+        """
+        Description:
+        ------------
 
+        This function is used to import the IO tables.
+
+        Return:
+        -------
+        :return: DataFrame of IO tables.
+        """
 
         my_path = Path(__file__).parent.parent.resolve()
         my_path = str(my_path) + '/e_blackfire_capital_files/'
@@ -220,36 +286,93 @@ class MiscellaneousFunctions:
 
         # group columns by bea naics and apply the sum
         data = data.groupby(data.columns, axis=1).sum()
-        data = data.groupby(['Year','Origin', 'Code']).sum().reset_index()
+        data = data.groupby(['Year', 'Origin', 'Code']).sum().reset_index()
 
-        # Calculate finals demands
-        data.loc[:, 'FD'] = data[['CONS_h', 'CONS_np', 'CONS_g', 'GFCF', 'INVEN', 'EXP']].sum(axis=1)
+        # nace_group.reset_index(inplace=True)
+        # print(frozenset(data.columns) - frozenset(nace_group['group']))
+        # print(frozenset(nace_group['group']) - frozenset(data.columns))
+
+        # Calculate finals demands and Gov consumption.
+        data.loc[:, 'FD'] = data[['CONS_h', 'CONS_np', 'CONS_g']].sum(axis=1)
+        # data.loc[:, 'GOV'] = data[['Q', 'R_S', 'N', 'U']].sum(axis=1)
 
         return data
 
+    def get_leontief_matrix(self, year: int) -> pd.DataFrame:
 
-    def return_leontief_matrix(niot_matrix):
+        """
+        Description:
+        ------------
+        This function is used to compute the leontief matrix for a given year. Leontief matrix is given by:
+        F = [I - (I - M) * A] * X. Where F is final demands, M is imports matrix and A is domestic matrix.
 
-        header = ['Year', 'Code', 'Origin', '111CA', '113FF', '213', '22', '23', '311FT', '315AL', '321', '322', '323',
-                  '324', '325', '326', '327', '331', '332', '333', '334', '335', '3361MV', '3364OT', '339', '42', '481',
-                  '483', '486', '487OS', '493', '4A0', '511', '513', '521CI', '523', '525', '5412OP', '5415', '55', '61',
-                  '722', '81', 'D35', 'GSLE', 'N', 'ORE', 'Q', 'R_S', 'Used']
+        Parameter:
+        ----------
+        :param year:
+        :return:
+        """
+        year = year - 5 if year > 2004 else 2000
 
-        def get_leontief_matrix(group, header):
+        header = ['Origin', 'Code', 'A01', 'A02', 'B', 'C10-C12', 'C13-C15', 'C16', 'C17', 'C18', 'C19',
+                  'C21', 'C22', 'C23', 'C24', 'C25', 'C26', 'C27', 'C28', 'C29', 'C30', 'C31_C32', 'E36', 'E37-E39',
+                  'F', 'G46', 'G47', 'H49', 'H50', 'H51', 'H52', 'I', 'J58', 'J61', 'J62_J63', 'K64', 'K65', 'K66',
+                  'L68', 'M74_M75', 'N', 'O84', 'P85', 'Q', 'R_S', 'S96']
 
-            new_header = header[:]
-            new_header.remove('Year')
-            new_header.remove('Code')
-            new_header.remove('Origin')
+        # get the IO tables
+        niot_matrix = self.get_wiod_table()
+        mask = (niot_matrix['Origin'].isin(['Domestic', 'Imports', 'TOT'])) & (niot_matrix['Year'].astype(int) == year)
+        niot_matrix = niot_matrix[mask][header]
 
-            total = group[group['Code'] == 'GO'][new_header].values[0]
-            group = np.identity(len(new_header)) - group[group['Code'].isin(new_header)][new_header]/total
-            group = np.linalg.inv(group)
+        new_header = header[:]
+        new_header.remove('Code')
+        new_header.remove('Origin')
 
-            return pd.DataFrame(group, new_header, new_header)
+        # Divide each column by the total output.
+        total = niot_matrix[niot_matrix['Code'] == 'GO'][new_header].values[0]
+        niot_matrix.loc[:, new_header] = niot_matrix.loc[:, new_header]/total
 
-        niot_matrix = niot_matrix[niot_matrix['Origin'].isin(['Domestic', 'TOT'])][header]
-        niot_matrix.groupby(['Year']).apply(get_leontief_matrix, header).to_excel('leontief.xlsx')
-g = MiscellaneousFunctions().import_wiod_table()
+        # Apply the formula of the leontief matrix. A = [I - (I - M) * D]
+        niot_matrix = niot_matrix[niot_matrix['Code'].isin(new_header)].reset_index(drop=True)
+        niot_matrix.set_index('Code', inplace=True)
+        dom_matrix = niot_matrix[(niot_matrix['Origin'] == 'Domestic')][new_header]
+        imp_matrix = niot_matrix[(niot_matrix['Origin'] == 'Imports')][new_header]
+        identity_matrix = np.identity(len(new_header))
 
-# g.drop_duplicates(['nace_sector']).to_excel('test_.xlsx')
+        leontief_matrix = (identity_matrix - dom_matrix)
+        # print(np.fill_diagonal(leontief_matrix.values, 0))
+        # print(leontief_matrix)
+        # leontief_matrix.to_excel('t.xlsx')
+        return leontief_matrix
+
+    @staticmethod
+    def apply_ranking(group: pd.DataFrame, by: str, percentile: list) -> pd.DataFrame:
+
+        """"
+        Description:
+        ------------
+
+        This function take a DataFrame as input and return a columns with a ranking from percentile range
+        given the feature.
+
+        :param
+        group: DataFrame containing the values to rank
+        by:  Name of the column to rank
+
+        :return
+        DataFrame containing one column ranking with the features ranks.
+
+        """""
+
+        labels = [str(i + 1) for i in range(len(percentile) - 1)]
+        tab_group = group[[by]].quantile(np.array(percentile), numeric_only=False)
+        group = group.fillna(np.nan)
+
+        tab_group['labels'] = ['0'] + labels
+        x = tab_group[[by, 'labels']].drop_duplicates([by])
+        labels = list(x['labels'])
+        labels.remove('0')
+        group['ranking_' + by] = pd.cut(group[by], x[by], labels=labels). \
+            values.add_categories('0').fillna('0')
+
+        return group
+MiscellaneousFunctions().get_leontief_matrix(2010)

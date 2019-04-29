@@ -43,7 +43,7 @@ class MarketInformation:
         if data_source == SECTORS_MARKET_DATA_DB_NAME:
             data = data.sort_values(['eco zone', 'sector', 'date'], ascending=[True, True, True])\
                 .reset_index(drop=True)
-            data['date'] = pd.DatetimeIndex(data['date'].dt.strftime('%Y-%m-%d')) + pd.offsets(0)
+            data['date'] = pd.DatetimeIndex(data['date'].dt.strftime('%Y-%m-%d')) + pd.DateOffset(0)
             data = data[['date', 'eco zone', 'sector', signal, 'ret', 'mc']]
             data.rename(columns={'ret': 'return'}, inplace=True)
 
@@ -284,21 +284,18 @@ class MarketInformation:
 
             else:
                 signal = self.get_signal_for_strategy(4)
-                signal['date'] = signal.set_index('date').shift(periods=1, freq='M').index
+                # signal['date'] = signal.set_index('date').shift(periods=1, freq='M').index
                 signal['group'] = 'ALL'
                 signal['constituent'] = signal['isin_or_cusip']
 
             portfolio = pd.merge(self._data, signal, on=['date', 'eco zone', 'sector', 'isin_or_cusip'])
-            portfolio.set_index('date', inplace=True)
+            value = portfolio.set_index('date').groupby('isin_or_cusip')[['mc', 'signal']].shift(periods=1, freq='M').reset_index()
             # portfolio.to_excel('test.xlsx')
 
-            mc_s = portfolio[['mc', 'isin_or_cusip']].shift(periods=1, freq='M')
-            portfolio.drop('mc', axis=1, inplace=True)
-            portfolio = pd.merge(portfolio.reset_index(),
-                                 mc_s.reset_index(),
-                                 on=['date', 'isin_or_cusip'],
-                                 how='left')
-
+            portfolio.drop(['mc', 'signal'], axis=1, inplace=True)
+            portfolio = pd.merge(portfolio,
+                                 value,
+                                 on=['date', 'isin_or_cusip'])
             # portfolio.to_excel('test_.xlsx')
             # print(a.shape)
         # return
@@ -308,8 +305,6 @@ class MarketInformation:
         portfolio.loc[portfolio['signal'].astype(int).isin(short_position), 'position'] = 's'
 
         portfolio.dropna(subset=['position'], inplace=True)
-        portfolio = portfolio[portfolio['date'] > date(2009, 2, 28)]
-        # portfolio.groupby(['date']).count()[['isin_or_cusip']].to_excel('test.xlsx')
         portfolio.set_index('date', inplace=True)
 
         header = ['group', 'constituent', 'return', 'mc', 'position']
@@ -322,22 +317,21 @@ if __name__ == '__main__':
     # sector = np.load('usa_summary_sectors.npy').item()
     # sector = pd.DataFrame(sector['data'], columns=sector['header'])
     # print(sector.columns)
-    # path = 'C:/Users/Ghislain/Google Drive/BlackFire Capital/Data/'
-    path = ''
+    path = 'C:/Users/Ghislain/Google Drive/BlackFire Capital/Data/'
+    # path = ''
 
     stocks = np.load(path + 'S&P Global 1200.npy').item()
     stocks = pd.DataFrame(stocks['data'], columns=stocks['header'])
 
-    custom_sector = MiscellaneousFunctions().get_custom_group_for_io()
+    # custom_sector = MiscellaneousFunctions().get_custom_group_for_io()
 
-    stocks = pd.merge(stocks, custom_sector[['sector', 'group']], on='sector')
-    stocks.groupby(['date', 'group']).count()[['isin_or_cusip']].to_excel('test.xlsx')
+    # stocks = pd.merge(stocks, custom_sector[['sector', 'group']], on='sector')
     # print(stocks.columns)
     # MarketInformation(stocks, STOCKS_MARKET_DATA_DB_NAME, 'pt_ret', True,
     #                   index_filter=['031855'])._get_stocks_strategy(1)
 
     index_filter = ['031855', '150927', '151015', '000010', '153376', '151012', '150915', '150916']
-
-    MarketInformation(stocks, STOCKS_MARKET_DATA_DB_NAME, 'rec', True). \
-        get_strategy_statistics(long_position=[10], short_position=[None], eco_zone=None,
+    percentile = [i for i in np.linspace(0, 1, 11)]
+    MarketInformation(stocks, STOCKS_MARKET_DATA_DB_NAME, 'pt_ret', True, percentile=percentile). \
+        get_strategy_statistics(long_position=[10], short_position=[1], eco_zone=None,
                                 sector=None)

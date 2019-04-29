@@ -35,6 +35,8 @@ SECTORS_MARKET_DATA_MAPPING_DB_COL_NAME = 'mapping'
 ECONOMICS_ZONES_DB_NAME = 'economics_zones'
 ECONOMICS_ZONES_DB_COL_NAME = 'infos'
 
+IO_SUPPLY = 'supply'
+IO_DEMAND = 'demand'
 
 COUNTRY_ZONE_AND_EXCHG = [['canada','CAN','CAD','7'], ['united states','USA','USD','11','12','14','17'],
            ['austria', 'AUT', 'EUR', '150', '273'],

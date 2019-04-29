@@ -148,7 +148,7 @@ def turnover(returns):
     return t.mean(), t
 
 
-def strategy_returns(portfolio, methods='equal_weighted'):
+def strategy_returns(portfolio, methods='market_cap_weighted'):
 
     def calculate_return(group):
         return (group['weight'] * group['return']).sum() / group['weight'].sum()

@@ -22,7 +22,7 @@ class DisplaySheetStatistics:
     def __init__(self, portfolio, title, description, benchmark=None, rolling_periods=12, rolling_sharpe=True):
 
         self.portfolio = portfolio.sort_index()
-        if benchmark:
+        if benchmark is not None:
             self.benchmark = benchmark.sort_index()
         else:
             self.benchmark = None

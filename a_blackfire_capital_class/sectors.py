@@ -891,18 +891,20 @@ class Sectors:
 
 
 if __name__ == '__main__':
-    index_filter_sp_all = ['031855', '150927', '151015', '000010', '153376', '151012', '150915', '150916']
+    index_filter_sp_all = ['031855', '150927', '150916', '000010', '153376', '151012', '150915', '150916']
     result = Sectors(by=NAICS, connection_string=PROD_CONNECTION_STRING).\
         get_monthly_stocks_summary_with_eco_zone_and_sector_from_mongodb(start_date=date(1999, 1, 1),
                                                                          end_date=date(2017, 12, 31),
                                                                          query_sector_mapping={'level': '2'},
-                                                                         to_display=None)
+                                                                         to_display=None,
+                                                                         index_filter=index_filter_sp_all)
     print(result)
-    path = 'C:/Users/Ghislain/Google Drive/BlackFire Capital/Data/'
+    # path = 'C:/Users/Ghislain/Google Drive/BlackFire Capital/Data/'
+    path = ''
     d = dict()
     d['data'] = result
     d['header'] = result.columns
-    np.save(path + 'S&P Global 1200.npy', d)
+    np.save(path + 'S&P Global ALL.npy', d)
     # result.to_excel('test_.xlsx')
 
 

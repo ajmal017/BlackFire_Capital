@@ -317,10 +317,10 @@ if __name__ == '__main__':
     # sector = np.load('usa_summary_sectors.npy').item()
     # sector = pd.DataFrame(sector['data'], columns=sector['header'])
     # print(sector.columns)
-    path = 'C:/Users/Ghislain/Google Drive/BlackFire Capital/Data/'
-    # path = ''
+    # path = 'C:/Users/Ghislain/Google Drive/BlackFire Capital/Data/'
+    path = ''
 
-    stocks = np.load(path + 'S&P Global 1200.npy').item()
+    stocks = np.load(path + 'S&P Global ALL.npy').item()
     stocks = pd.DataFrame(stocks['data'], columns=stocks['header'])
 
     # custom_sector = MiscellaneousFunctions().get_custom_group_for_io()
@@ -331,7 +331,7 @@ if __name__ == '__main__':
     #                   index_filter=['031855'])._get_stocks_strategy(1)
 
     index_filter = ['031855', '150927', '151015', '000010', '153376', '151012', '150915', '150916']
-    percentile = [i for i in np.linspace(0, 1, 11)]
+    percentile = [i for i in np.linspace(0, 1, 21)]
     MarketInformation(stocks, STOCKS_MARKET_DATA_DB_NAME, 'pt_ret', True, percentile=percentile). \
-        get_strategy_statistics(long_position=[10], short_position=[1], eco_zone=None,
+        get_strategy_statistics(long_position=[20], short_position=[None], eco_zone=None,
                                 sector=None)

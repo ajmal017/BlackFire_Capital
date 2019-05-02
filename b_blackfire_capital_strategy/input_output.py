@@ -17,7 +17,7 @@ class IOStrategy:
         self._by = by
         self._signal = signal
         self._is_sector_data = kwargs.get('sector_data', False)
-        self._percentile = kwargs.get('percentile', [i for i in np.linspace(0, 1, 6)])
+        self._percentile = kwargs.get('percentile', [i for i in np.linspace(0, 1, 11)])
         self._sector_data = None
 
     @staticmethod
@@ -36,7 +36,12 @@ class IOStrategy:
                              left_on='Code', right_on='sector', how='left')
         s_summary[signal] = s_summary[signal].fillna(0)
         result = leontief.dot(s_summary.set_index('Code')[signal]).to_frame('value')
-
+        result = result[result.index.isin(['A01', 'A02', 'B', 'C16', 'C17', 'C18', 'C19', 'C21',
+                                               'C22', 'C23', 'C24', 'C25', 'C27', 'E36', 'E37-E39',
+                                               'H49', 'H52', 'J61', 'K64', 'K66', 'M74_M75', 'N'])]
+        leontief.loc[:, 'sum'] = leontief.sum(axis=1)
+        # print(leontief['sum'])
+        result.loc[:, 'value'] = result['value'] / leontief['sum']
         s_summary = pd.merge(s_summary.dropna(subset=['sector']), result, left_on='sector', right_on=result.index)
         s_summary = s_summary[['date', 'sector', 'value']]
         s_summary.rename(columns={'value': signal}, inplace=True)
@@ -75,11 +80,13 @@ class IOStrategy:
         s_summary = self._sector_data[['date', 'sector', self._signal]]
 
         # Get result for the Leontief matrix.
+        print("\n########### Compute Leontief matrix ###########")
         group = s_summary.groupby(['date'])
         tab_parameter = [(data, name.year, self._signal, self._by) for name, data in group]
         result = CustomMultiprocessing().exec_in_parallel(tab_parameter, self._get_signal)
 
         # Rank the signal by percentile
+        print("\n########### Rank signal by percentile ###########")
         group = result.groupby(['date'])
         tab_parameter = [(data, self._signal, self._percentile) for name, data in group]
         result = CustomMultiprocessing().exec_in_parallel(tab_parameter, MiscellaneousFunctions().apply_ranking)
@@ -98,24 +105,33 @@ class IOStrategy:
         portfolio.rename(columns={'sector': 'constituent', 'ret': 'return'}, inplace=True)
         portfolio.loc[:, 'position'] = None
         portfolio.loc[:, 'group'] = 'ALL'
-        portfolio.loc[portfolio['signal'].astype(int).isin([5]), 'position'] = 'l'
+        portfolio.loc[portfolio['signal'].astype(int).isin([10]), 'position'] = 'l'
         # portfolio.loc[portfolio['signal'].astype(int).isin([1]), 'position'] = 's'
 
         portfolio.dropna(subset=['position'], inplace=True)
         portfolio.set_index('date', inplace=True)
+        # print(portfolio)
+
+        self._data.loc[:, 'eco zone']= 'ALL'
+        self._data.loc[:, 'sector'] = 'ALL'
+        benchmark = Sectors().compute_monthly_sectors_summary(self._data)
+        benchmark.rename(columns={'ret': 'benchmark'}, inplace=True)
+        benchmark.set_index('date', inplace=True)
+        # print(benchmark)
 
         header = ['group', 'constituent', 'return', 'mc', 'position']
-        stat = DisplaySheetStatistics(portfolio[header], 'USD', '')
+        stat = DisplaySheetStatistics(portfolio[header], 'USD', '', benchmark=benchmark[['benchmark']])
         stat.plot_results()
 
 
 if __name__ == '__main__':
 
-    path = 'C:/Users/Ghislain/Google Drive/BlackFire Capital/Data/'
-    # path = ''
+    # path = 'C:/Users/Ghislain/Google Drive/BlackFire Capital/Data/'
+    path = ''
 
-    stocks = np.load(path + 'S&P Global 1200.npy').item()
+    stocks = np.load(path + 'S&P Global ALL.npy').item()
     stocks = pd.DataFrame(stocks['data'], columns=stocks['header'])
+    # stocks.loc[:, 'eco zone'] = 'USD'
     stocks = stocks[stocks['eco zone'] == 'USD']
 
-    IOStrategy(data=stocks, by=IO_SUPPLY, signal='ret').display_sheet()
+    IOStrategy(data=stocks, by=IO_SUPPLY, signal='pt_ret').display_sheet()

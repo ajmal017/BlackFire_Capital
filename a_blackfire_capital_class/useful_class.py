@@ -288,13 +288,10 @@ class MiscellaneousFunctions:
         data = data.groupby(data.columns, axis=1).sum()
         data = data.groupby(['Year', 'Origin', 'Code']).sum().reset_index()
 
-        # nace_group.reset_index(inplace=True)
-        # print(frozenset(data.columns) - frozenset(nace_group['group']))
-        # print(frozenset(nace_group['group']) - frozenset(data.columns))
+        nace_group.reset_index(inplace=True)
 
         # Calculate finals demands and Gov consumption.
-        data.loc[:, 'FD'] = data[['CONS_h', 'CONS_np', 'CONS_g']].sum(axis=1)
-        # data.loc[:, 'GOV'] = data[['Q', 'R_S', 'N', 'U']].sum(axis=1)
+        data.loc[:, 'FD'] = data[['EXP', 'GFCF', 'CONS_h', 'CONS_np', 'CONS_g', 'INVEN', 'U']].sum(axis=1)
 
         return data
 
@@ -329,7 +326,8 @@ class MiscellaneousFunctions:
 
         # Divide each column by the total output.
         total = niot_matrix[niot_matrix['Code'] == 'GO'][new_header].values[0]
-        niot_matrix.loc[:, new_header] = niot_matrix.loc[:, new_header]/total
+        # niot_matrix.loc[:, new_header] = niot_matrix.loc[:, new_header]/total
+        # niot_matrix.loc[:, new_header] = niot_matrix.loc[:, new_header]
 
         # Apply the formula of the leontief matrix. A = [I - (I - M) * D]
         niot_matrix = niot_matrix[niot_matrix['Code'].isin(new_header)].reset_index(drop=True)
@@ -342,7 +340,8 @@ class MiscellaneousFunctions:
         # print(np.fill_diagonal(leontief_matrix.values, 0))
         # print(leontief_matrix)
         # leontief_matrix.to_excel('t.xlsx')
-        return leontief_matrix
+        np.fill_diagonal(dom_matrix.values, 0)
+        return dom_matrix
 
     @staticmethod
     def apply_ranking(group: pd.DataFrame, by: str, percentile: list) -> pd.DataFrame:
@@ -375,4 +374,5 @@ class MiscellaneousFunctions:
             values.add_categories('0').fillna('0')
 
         return group
-MiscellaneousFunctions().get_leontief_matrix(2010)
+
+# print(MiscellaneousFunctions().get_leontief_matrix(2010))

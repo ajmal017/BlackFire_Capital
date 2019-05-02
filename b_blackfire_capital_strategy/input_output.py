@@ -32,6 +32,7 @@ class IOStrategy:
         else:
             raise ValueError("Incorrect Input value. By must be {} or {}".format(IO_DEMAND, IO_SUPPLY))
 
+
         s_summary = pd.merge(leontief.reset_index()[['Code']], group,
                              left_on='Code', right_on='sector', how='left')
         s_summary[signal] = s_summary[signal].fillna(0)
@@ -40,8 +41,8 @@ class IOStrategy:
                                                'C22', 'C23', 'C24', 'C25', 'C27', 'E36', 'E37-E39',
                                                'H49', 'H52', 'J61', 'K64', 'K66', 'M74_M75', 'N'])]
         leontief.loc[:, 'sum'] = leontief.sum(axis=1)
-        # print(leontief['sum'])
         result.loc[:, 'value'] = result['value'] / leontief['sum']
+        # print(result)
         s_summary = pd.merge(s_summary.dropna(subset=['sector']), result, left_on='sector', right_on=result.index)
         s_summary = s_summary[['date', 'sector', 'value']]
         s_summary.rename(columns={'value': signal}, inplace=True)
@@ -105,7 +106,7 @@ class IOStrategy:
         portfolio.rename(columns={'sector': 'constituent', 'ret': 'return'}, inplace=True)
         portfolio.loc[:, 'position'] = None
         portfolio.loc[:, 'group'] = 'ALL'
-        portfolio.loc[portfolio['signal'].astype(int).isin([10]), 'position'] = 'l'
+        portfolio.loc[portfolio['signal'].astype(int).isin([1]), 'position'] = 'l'
         # portfolio.loc[portfolio['signal'].astype(int).isin([1]), 'position'] = 's'
 
         portfolio.dropna(subset=['position'], inplace=True)

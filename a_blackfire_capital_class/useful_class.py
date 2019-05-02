@@ -336,12 +336,12 @@ class MiscellaneousFunctions:
         imp_matrix = niot_matrix[(niot_matrix['Origin'] == 'Imports')][new_header]
         identity_matrix = np.identity(len(new_header))
 
-        leontief_matrix = (identity_matrix - dom_matrix)
-        # print(np.fill_diagonal(leontief_matrix.values, 0))
-        # print(leontief_matrix)
-        # leontief_matrix.to_excel('t.xlsx')
-        np.fill_diagonal(dom_matrix.values, 0)
-        return dom_matrix
+        leontief_matrix = (identity_matrix - (identity_matrix - imp_matrix) * dom_matrix)
+
+        np.fill_diagonal(leontief_matrix.values, 0)
+        # leontief_matrix = leontief_matrix/leontief_matrix.sum()
+
+        return leontief_matrix
 
     @staticmethod
     def apply_ranking(group: pd.DataFrame, by: str, percentile: list) -> pd.DataFrame:

@@ -17,7 +17,7 @@ class IOStrategy:
         self._by = by
         self._signal = signal
         self._is_sector_data = kwargs.get('sector_data', False)
-        self._percentile = kwargs.get('percentile', [i for i in np.linspace(0, 1, 11)])
+        self._percentile = kwargs.get('percentile', [i for i in np.linspace(0, 1, 6)])
         self._sector_data = None
 
     @staticmethod
@@ -32,16 +32,15 @@ class IOStrategy:
         else:
             raise ValueError("Incorrect Input value. By must be {} or {}".format(IO_DEMAND, IO_SUPPLY))
 
-
         s_summary = pd.merge(leontief.reset_index()[['Code']], group,
                              left_on='Code', right_on='sector', how='left')
         s_summary[signal] = s_summary[signal].fillna(0)
         result = leontief.dot(s_summary.set_index('Code')[signal]).to_frame('value')
-        result = result[result.index.isin(['A01', 'A02', 'B', 'C16', 'C17', 'C18', 'C19', 'C21',
-                                               'C22', 'C23', 'C24', 'C25', 'C27', 'E36', 'E37-E39',
-                                               'H49', 'H52', 'J61', 'K64', 'K66', 'M74_M75', 'N'])]
-        leontief.loc[:, 'sum'] = leontief.sum(axis=1)
-        result.loc[:, 'value'] = result['value'] / leontief['sum']
+        # result = result[result.index.isin(['A01', 'A02', 'B', 'C16', 'C17', 'C18', 'C19', 'C21',
+        #                                        'C22', 'C23', 'C24', 'C25', 'C27', 'E36', 'E37-E39',
+        #                                        'H49', 'H52', 'J61', 'K64', 'K66', 'M74_M75', 'N'])]
+        # leontief.loc[:, 'sum'] = leontief.sum(axis=1)
+        # result.loc[:, 'value'] = result['value'] / leontief['sum']
         # print(result)
         s_summary = pd.merge(s_summary.dropna(subset=['sector']), result, left_on='sector', right_on=result.index)
         s_summary = s_summary[['date', 'sector', 'value']]
@@ -106,7 +105,7 @@ class IOStrategy:
         portfolio.rename(columns={'sector': 'constituent', 'ret': 'return'}, inplace=True)
         portfolio.loc[:, 'position'] = None
         portfolio.loc[:, 'group'] = 'ALL'
-        portfolio.loc[portfolio['signal'].astype(int).isin([1]), 'position'] = 'l'
+        portfolio.loc[portfolio['signal'].astype(int).isin([5]), 'position'] = 'l'
         # portfolio.loc[portfolio['signal'].astype(int).isin([1]), 'position'] = 's'
 
         portfolio.dropna(subset=['position'], inplace=True)
@@ -127,12 +126,12 @@ class IOStrategy:
 
 if __name__ == '__main__':
 
-    # path = 'C:/Users/Ghislain/Google Drive/BlackFire Capital/Data/'
-    path = ''
+    path = 'C:/Users/Ghislain/Google Drive/BlackFire Capital/Data/'
+    # path = ''
 
-    stocks = np.load(path + 'S&P Global ALL.npy').item()
+    stocks = np.load(path + 'S&P Global 1200.npy').item()
     stocks = pd.DataFrame(stocks['data'], columns=stocks['header'])
-    # stocks.loc[:, 'eco zone'] = 'USD'
-    stocks = stocks[stocks['eco zone'] == 'USD']
+    stocks.loc[:, 'eco zone'] = 'USD'
+    # stocks = stocks[stocks['eco zone'] == 'USD']
 
-    IOStrategy(data=stocks, by=IO_SUPPLY, signal='pt_ret').display_sheet()
+    IOStrategy(data=stocks, by=IO_SUPPLY, signal='rcvar').display_sheet()

@@ -326,7 +326,7 @@ class MiscellaneousFunctions:
 
         # Divide each column by the total output.
         total = niot_matrix[niot_matrix['Code'] == 'GO'][new_header].values[0]
-        # niot_matrix.loc[:, new_header] = niot_matrix.loc[:, new_header]/total
+        niot_matrix.loc[:, new_header] = niot_matrix.loc[:, new_header]/total
         # niot_matrix.loc[:, new_header] = niot_matrix.loc[:, new_header]
 
         # Apply the formula of the leontief matrix. A = [I - (I - M) * D]
@@ -336,9 +336,18 @@ class MiscellaneousFunctions:
         imp_matrix = niot_matrix[(niot_matrix['Origin'] == 'Imports')][new_header]
         identity_matrix = np.identity(len(new_header))
 
-        leontief_matrix = (identity_matrix - (identity_matrix - imp_matrix) * dom_matrix)
 
+        leontief_matrix = dom_matrix
+        diag_matrix = identity_matrix * leontief_matrix
+        diag_matrix['sum'] = diag_matrix.sum(axis=1)
+        diag_matrix['value'] = 1 / (1-diag_matrix['sum'])
+        # print(leontief_matrix)
+        # print(diag_matrix)
         np.fill_diagonal(leontief_matrix.values, 0)
+        leontief_matrix = 1000 * leontief_matrix / diag_matrix['value']
+        # leontief_matrix['max'] = leontief_matrix.max(axis=1)
+        # leontief_matrix['sum'] = leontief_matrix.sum(axis=1)
+        # leontief_matrix.to_excel('test.xlsx')
         # leontief_matrix = leontief_matrix/leontief_matrix.sum()
 
         return leontief_matrix

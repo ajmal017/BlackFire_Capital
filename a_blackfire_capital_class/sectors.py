@@ -515,7 +515,8 @@ class Sectors:
             ret = None
             pt_return = None
 
-        mpt_return = group['pt_ret'].mean()
+        eq_ret = group['ret'].count()
+        eq_pt_return = group['pt_ret'].mean()
 
         if group['npptvar'].sum() != 0:
             pptvar = (group['pptvar'] * group['npptvar']).sum() / group['npptvar'].sum()
@@ -537,12 +538,12 @@ class Sectors:
         else:
             rcvar = None
 
-        tab = pd.DataFrame([[ret, pt_return, mpt_return, pptvar, ptvar, rc, rcvar]],
-                           columns=['ret', 'pt_ret', 'mpt_ret', 'pptvar', 'ptvar', 'rec', 'rcvar'])
+        tab = pd.DataFrame([[ret, eq_ret, pt_return, eq_pt_return, pptvar, ptvar, rc, rcvar]],
+                           columns=['ret', 'eq_ret', 'pt_ret', 'eq_pt_ret', 'pptvar', 'ptvar', 'rec', 'rcvar'])
 
         tab = pd.concat([group[sum].sum().to_frame().transpose(), tab], axis=1, ignore_index=True)
-        tab.columns = ['mc', 'vol', 'npt', 'npptvar', 'nptvar', 'nrec', 'nrcvar', 'ret', 'pt_ret', 'mpt_ret',
-                       'pptvar', 'ptvar', 'rec', 'rcvar']
+        tab.columns = ['mc', 'vol', 'npt', 'npptvar', 'nptvar', 'nrec', 'nrcvar', 'ret', 'eq_ret', 'pt_ret',
+                       'eq_pt_ret', 'pptvar', 'ptvar', 'rec', 'rcvar']
 
         tab['eco zone'] = zone
         tab['sector'] = sector

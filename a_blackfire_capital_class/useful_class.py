@@ -8,6 +8,9 @@ import sys
 import smtplib, ssl
 from pathlib import Path
 from unicodedata import normalize
+from matplotlib import pyplot as plt
+
+from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import IO_DEMAND, IO_SUPPLY, COUNTRY_ZONE_AND_EXCHG
 
 
 class CustomMultiprocessing:
@@ -295,7 +298,7 @@ class MiscellaneousFunctions:
 
         return data
 
-    def get_leontief_matrix(self, year: int) -> pd.DataFrame:
+    def get_leontief_matrix(self, year: int, by) -> pd.DataFrame:
 
         """
         Description:
@@ -327,7 +330,6 @@ class MiscellaneousFunctions:
         # Divide each column by the total output.
         total = niot_matrix[niot_matrix['Code'] == 'GO'][new_header].values[0]
         niot_matrix.loc[:, new_header] = niot_matrix.loc[:, new_header]/total
-        # niot_matrix.loc[:, new_header] = niot_matrix.loc[:, new_header]
 
         # Apply the formula of the leontief matrix. A = [I - (I - M) * D]
         niot_matrix = niot_matrix[niot_matrix['Code'].isin(new_header)].reset_index(drop=True)
@@ -336,21 +338,96 @@ class MiscellaneousFunctions:
         imp_matrix = niot_matrix[(niot_matrix['Origin'] == 'Imports')][new_header]
         identity_matrix = np.identity(len(new_header))
 
-
         leontief_matrix = dom_matrix
         diag_matrix = identity_matrix * leontief_matrix
-        diag_matrix['sum'] = diag_matrix.sum(axis=1)
-        diag_matrix['value'] = 1 / (1-diag_matrix['sum'])
-        # print(leontief_matrix)
-        # print(diag_matrix)
         np.fill_diagonal(leontief_matrix.values, 0)
-        leontief_matrix = 1000 * leontief_matrix / diag_matrix['value']
-        # leontief_matrix['max'] = leontief_matrix.max(axis=1)
-        # leontief_matrix['sum'] = leontief_matrix.sum(axis=1)
-        # leontief_matrix.to_excel('test.xlsx')
-        # leontief_matrix = leontief_matrix/leontief_matrix.sum()
 
+        if by == IO_DEMAND:
+            diag_matrix['total sales'] = diag_matrix.sum(axis=1)
+            diag_matrix['value'] = 1 / (1 - diag_matrix['total sales'])
+            leontief_matrix = 1000 * leontief_matrix / diag_matrix['value']
+
+        elif by == IO_SUPPLY:
+            diag_matrix.loc['total production'] = diag_matrix.sum()
+            diag_matrix.loc['value'] = 1 / (1 - diag_matrix.loc['total production'])
+            leontief_matrix = 1000 * leontief_matrix / diag_matrix.loc[['value']].values[0]
+
+        # leontief_matrix.to_excel('test.xlsx')
+        # leontief_matrix = (identity_matrix - dom_matrix)
+        # np.fill_diagonal(leontief_matrix.values, 1)
+        # leontief_matrix = pd.DataFrame(np.linalg.pinv(leontief_matrix.values), leontief_matrix.columns,
+        #                                leontief_matrix.index)
+        # s = leontief_matrix.sum().sum()/leontief_matrix.shape[0]
+        # leontief_matrix['total sales'] = leontief_matrix.sum(axis=1)
+        # leontief_matrix.loc['total production'] = leontief_matrix.sum()
+        # leontief_matrix = leontief_matrix/ s
+        # prod = leontief_matrix[leontief_matrix.index == 'total production'].transpose()
+        # sales = leontief_matrix[['total sales']]
+        #
+        # result = pd.merge(prod, sales, on=sales.index).head(44)
+        # fig = plt.figure()
+        # ax = fig.add_subplot(111)
+        # plt.plot(result['total production'], result['total sales'], 'ro', [1, 1], [0, 3])
+        # for index, x in result.iterrows():
+        #     ax.annotate(x['key_0'], xy=(x['total production'], x['total sales']), )
+        #
+        # plt.grid()
+        # plt.ylim(0.5, 2.8)
+        # plt.xlim(0.8, 1.35)
+        # plt.show()
         return leontief_matrix
+
+    def get_global_wiod_table(self) -> pd.DataFrame:
+        """
+        Description:
+        ------------
+
+        This function is used to import the IO tables.
+
+        Return:
+        -------
+        :return: DataFrame of IO tables.
+        """
+        eco_zone = pd.DataFrame(COUNTRY_ZONE_AND_EXCHG)
+        eco_zone.set_index(1, inplace=True)
+        eco_zone = eco_zone[[2]]
+
+        my_path = Path(__file__).parent.parent.resolve()
+        my_path = str(my_path) + '/e_blackfire_capital_files/'
+        data = pd.read_excel(my_path + 'wiot global.xlsx', sheet_name='2014', index_col=None, header=None)
+
+        # Get header
+        arrays = [data.loc[1], data.loc[0]]
+        tuples = list(zip(*arrays))
+        index = pd.MultiIndex.from_tuples(tuples, names=['country', 'sector'])
+        data.drop([0, 1, 2], inplace=True)
+        data.reset_index(drop=True)
+        data.columns = [value[0] + '_' + value[1] for value in tuples]
+
+        # rename columns country to eco zone and sum row by eco zone
+        data.loc[:, 'Country_Country'] = data.loc[:, 'Country_Country'].replace(eco_zone.to_dict()[2])
+        data = data.groupby(['Country_Country', 'Code_Code']).sum().reset_index()
+        data = data[data['Country_Country'].isin(eco_zone[2].unique().tolist() + ['TOT'])]
+
+        # Group columns by eco zone
+        data.columns = index
+        data.rename(columns=eco_zone.to_dict()[2], inplace=True, level=0)
+        data.to_excel('wiot.xlsx')
+
+
+        return
+        data.columns.map('_'.join)
+
+        data.columns = index
+        df = data[['USA', 'CAN']]
+        print(data.columns)
+        v = df.groupby(level=1, axis=1).sum()
+        df = df.join(v)
+
+
+        df.to_excel('ok 2.xlsx')
+        print(data.columns.map('_'.join))
+        # print(data.head(10))
 
     @staticmethod
     def apply_ranking(group: pd.DataFrame, by: str, percentile: list) -> pd.DataFrame:
@@ -384,4 +461,42 @@ class MiscellaneousFunctions:
 
         return group
 
-# print(MiscellaneousFunctions().get_leontief_matrix(2010))
+    @staticmethod
+    def apply_z_score(identification: dict, data: pd.DataFrame) -> pd.DataFrame:
+
+        """
+        Description:
+        -----------
+
+        This function is used to compute the 12 month z-score.
+
+        Parameter:
+        ----------
+
+        :param identification: dict with key: ('eco zone', 'sector', 'gvkey')
+        :param data: DataFrame
+
+        Return:
+        ------
+        :return:
+        """
+
+        def z_score(group):
+            """
+                 This function is used to compute the z-score of an array input.
+
+                 :param group: array of the data we want to compute the
+            """
+
+            return (group[-1] - group.mean()) / group.std()
+
+        value = data.resample('1M').bfill(limit=1)
+        value = value.rolling(12, min_periods=9).apply(z_score, raw=True)
+
+        value['eco zone'] = identification.get('eco zone', None)
+        value['sector'] = identification.get('sector', None)
+        value['isin_or_cusip'] = identification.get('isin_or_cusip', None)
+
+        return value
+
+# print(MiscellaneousFunctions().get_global_wiod_table())

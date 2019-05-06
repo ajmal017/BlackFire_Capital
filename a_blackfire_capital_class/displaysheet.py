@@ -64,7 +64,7 @@ class DisplaySheetStatistics:
         stats['price'] = cstat.cum_returns(stats['return'], 'back test')
 
         # Rolling Annualised Sharpe
-        sharpe, rolling_sharpe_s =  cstat.create_sharpe_ratio(
+        sharpe, rolling_sharpe_s = cstat.create_sharpe_ratio(
             portfolio[['return', 'bonds']], self.rolling_periods
         )
         # print(stats['return'])

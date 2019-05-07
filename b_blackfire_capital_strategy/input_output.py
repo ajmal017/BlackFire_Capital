@@ -161,4 +161,4 @@ if __name__ == '__main__':
     stocks = pd.DataFrame(stocks['data'], columns=stocks['header'])
     stocks = stocks[stocks['eco zone'].isin(['USD'])]
 
-    IOStrategy(data=stocks, by=IO_SUPPLY, signal='ret',consider_history=False).display_sheet()
+    IOStrategy(data=stocks, by=IO_DEMAND, signal='ret',consider_history=False).display_sheet()

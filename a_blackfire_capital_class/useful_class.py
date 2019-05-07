@@ -329,13 +329,15 @@ class MiscellaneousFunctions:
 
         # Divide each column by the total output.
         total = niot_matrix[niot_matrix['Code'] == 'GO'][new_header].values[0]
-        niot_matrix.loc[:, new_header] = niot_matrix.loc[:, new_header]/total
+
+        niot_matrix.set_index('Code', inplace=True)
+        niot_matrix = niot_matrix[(niot_matrix['Origin'] == 'Domestic')][new_header]
+        niot_matrix = niot_matrix[niot_matrix.index.isin(new_header)]
+        axis = 1 if by == IO_SUPPLY else 0
+        niot_matrix.loc[:, new_header] = niot_matrix.loc[:, new_header].divide(total, axis=axis)
 
         # Apply the formula of the leontief matrix. A = [I - (I - M) * D]
-        niot_matrix = niot_matrix[niot_matrix['Code'].isin(new_header)].reset_index(drop=True)
-        niot_matrix.set_index('Code', inplace=True)
-        dom_matrix = niot_matrix[(niot_matrix['Origin'] == 'Domestic')][new_header]
-        imp_matrix = niot_matrix[(niot_matrix['Origin'] == 'Imports')][new_header]
+        dom_matrix = niot_matrix
         identity_matrix = np.identity(len(new_header))
 
         leontief_matrix = dom_matrix
@@ -499,4 +501,4 @@ class MiscellaneousFunctions:
 
         return value
 
-# print(MiscellaneousFunctions().get_global_wiod_table())
+# print(MiscellaneousFunctions().get_leontief_matrix(2010, by=IO_DEMAND))

@@ -43,7 +43,7 @@ if __name__ == '__main__':
     portfolio.loc[(portfolio['signal'].astype(int).isin([5])) & (portfolio['signal 2'].astype(int).isin([10])),
                   'position'] = 'l'
     # portfolio.loc[(portfolio['signal'].astype(int).isin([1])) & (portfolio['signal 2'].astype(int).isin([1])),
-    #               'position'] = 'l'
+    #               'position'] = 's'
 
     portfolio.dropna(subset=['position'], inplace=True)
     print(portfolio.groupby('date')[['constituent']].count().mean())
@@ -58,5 +58,5 @@ if __name__ == '__main__':
     db.close()
 
     header = ['group', 'constituent', 'return', 'mc', 'position']
-    stat = DisplaySheetStatistics(portfolio[header], 'IO_SUPPLY WLD', '', benchmark=benchmark[['benchmark']])
+    stat = DisplaySheetStatistics(portfolio[header], 'IO_DEMAND USD NEW_', '', benchmark=benchmark[['benchmark']])
     stat.plot_results()

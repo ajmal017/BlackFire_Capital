@@ -43,6 +43,28 @@ class IOStrategy:
 
         return s_summary
 
+    @staticmethod
+    def _get_wld_signal(group, year, signal, by, leontief):
+
+        s_summary = pd.merge(leontief.reset_index()[['Code']], group, left_on='Code', right_on='custom_sector', how='left')
+        s_summary[signal] = s_summary[signal].fillna(0)
+
+        if by == IO_DEMAND:
+            result = leontief.dot(s_summary.set_index('Code')[signal]).to_frame('value')
+        elif by == IO_SUPPLY:
+            trans = s_summary.set_index('Code')[[signal]].transpose()
+            result = trans.dot(leontief).transpose()
+            result.rename(columns={signal: 'value'}, inplace=True)
+        else:
+            raise ValueError("Incorrect Input value. By must be {} or {}".format(IO_DEMAND, IO_SUPPLY))
+
+        s_summary = pd.merge(s_summary.dropna(subset=['custom_sector']), result, left_on='custom_sector',
+                             right_on=result.index)
+        s_summary = s_summary[['date', 'eco zone', 'sector', 'value']]
+        s_summary.rename(columns={'value': signal}, inplace=True)
+
+        return s_summary
+
     def group_stocks_by_sectors(self):
 
         """
@@ -68,7 +90,7 @@ class IOStrategy:
         else:
             self._sector_data = self._data
 
-    def get_strategy_signal(self):
+    def get_niot_strategy_signal(self):
 
         self.group_stocks_by_sectors()
         s_summary = self._sector_data[['date', 'eco zone', 'sector', self._signal]]
@@ -128,9 +150,55 @@ class IOStrategy:
 
         return result
 
+    def get_wiod_strategy_signal(self):
+
+        self.group_stocks_by_sectors()
+        s_summary = self._sector_data[['date', 'eco zone', 'sector', self._signal]]
+
+        if self._consider_history:
+            # if we want to use the acceleration of the signal instead of the signal itself.
+            print("\n ***** Computing Z-score to get acceleration on {} *****".format(self._signal))
+            result = s_summary.set_index('date')
+            group = result.groupby(['eco zone', 'sector'])
+            tab_parameter = [({'eco zone': name[0], 'sector': name[1], 'isin_or_cusip': None}, data[[self._signal]],)
+                             for name, data in group]
+            s_summary = CustomMultiprocessing().exec_in_parallel(tab_parameter, MiscellaneousFunctions().apply_z_score)
+            s_summary.dropna(subset=[self._signal], inplace=True)
+            s_summary.reset_index(inplace=True)
+
+        s_summary.loc[:, 'custom_sector'] = s_summary['eco zone'] + '_' + s_summary['sector']
+
+        ###############################################################################################################
+        #
+        # Get world leontief matrix.
+        #
+        ###############################################################################################################
+
+        # Get result for the Leontief matrix.
+        print("\n########### Compute Leontief matrix ###########")
+        leontief = MiscellaneousFunctions().get_global_leontief_matrix(self._by)
+        group = s_summary.groupby(['date'])
+        tab_parameter = [(data, name.year, self._signal, self._by, leontief) for name, data in group]
+        result = CustomMultiprocessing().exec_in_parallel(tab_parameter, self._get_wld_signal)
+
+        # Rank the signal by percentile
+        print("\n########### Rank signal by percentile ###########")
+        group = result.groupby(['date'])
+        tab_parameter = [(data, self._signal, self._percentile) for name, data in group]
+        result = CustomMultiprocessing().exec_in_parallel(tab_parameter, MiscellaneousFunctions().apply_ranking)
+        result.rename(columns={'ranking_' + self._signal: 'signal'}, inplace=True)
+
+        result = pd.merge(self._sector_data, result[['date', 'sector', 'signal', 'eco zone']],
+                          on=['date', 'sector', 'eco zone'])
+        value = result.set_index('date').groupby(['eco zone', 'sector'])[['mc', 'signal']].shift(periods=1, freq='M').reset_index()
+        result = pd.merge(self._sector_data[['date','eco zone', 'sector', 'ret']], value, on=['date', 'eco zone', 'sector'])
+
+        return result
+
     def display_sheet(self):
 
-        portfolio = self.get_strategy_signal()
+        # portfolio = self.get_niot_strategy_signal()
+        portfolio = self.get_wiod_strategy_signal()
         portfolio.rename(columns={'sector': 'constituent', 'ret': 'return'}, inplace=True)
         portfolio.loc[:, 'position'] = None
         portfolio.loc[:, 'group'] = 'ALL'
@@ -155,10 +223,10 @@ class IOStrategy:
 
 if __name__ == '__main__':
 
-    path = 'C:/Users/Ghislain/Google Drive/BlackFire Capital/Data/'
-    # path = ''
+    # path = 'C:/Users/Ghislain/Google Drive/BlackFire Capital/Data/'
+    path = ''
     stocks = np.load(path + 'S&P Global 1200.npy').item()
     stocks = pd.DataFrame(stocks['data'], columns=stocks['header'])
-    stocks = stocks[stocks['eco zone'].isin(['USD'])]
+    # stocks = stocks[stocks['eco zone'].isin(['USD'])]
 
-    IOStrategy(data=stocks, by=IO_DEMAND, signal='ret',consider_history=False).display_sheet()
+    IOStrategy(data=stocks, by=IO_SUPPLY, signal='ret',consider_history=False).display_sheet()

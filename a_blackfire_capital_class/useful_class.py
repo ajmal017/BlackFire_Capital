@@ -390,46 +390,111 @@ class MiscellaneousFunctions:
         -------
         :return: DataFrame of IO tables.
         """
-        eco_zone = pd.DataFrame(COUNTRY_ZONE_AND_EXCHG)
-        eco_zone.set_index(1, inplace=True)
-        eco_zone = eco_zone[[2]]
 
+        # Open files
         my_path = Path(__file__).parent.parent.resolve()
         my_path = str(my_path) + '/e_blackfire_capital_files/'
         data = pd.read_excel(my_path + 'wiot global.xlsx', sheet_name='2014', index_col=None, header=None)
 
+        # Get list of eco zone
+        eco_zone = pd.DataFrame(COUNTRY_ZONE_AND_EXCHG)
+        eco_zone.set_index(1, inplace=True)
+        eco_zone = eco_zone[[2]]
+
+        # Get sectors
+        nace_group = self.get_custom_group_for_io()
+        nace_group = nace_group.drop_duplicates(['nace_sector'])[['nace_sector', 'group']].set_index('nace_sector')
+        wiod_to_naics = nace_group.to_dict()
+
         # Get header
-        arrays = [data.loc[1], data.loc[0]]
+        arrays = [data.loc[1].replace(eco_zone.to_dict()[2]), data.loc[0].replace(wiod_to_naics['group'])]
         tuples = list(zip(*arrays))
-        index = pd.MultiIndex.from_tuples(tuples, names=['country', 'sector'])
         data.drop([0, 1, 2], inplace=True)
         data.reset_index(drop=True)
+
+        # group data by columns and sum
         data.columns = [value[0] + '_' + value[1] for value in tuples]
+        data = data.groupby(data.columns, axis=1).sum()
+        data.rename(columns={'Code_Code': 'Code', 'Country_Country': 'Country'}, inplace=True)
 
-        # rename columns country to eco zone and sum row by eco zone
-        data.loc[:, 'Country_Country'] = data.loc[:, 'Country_Country'].replace(eco_zone.to_dict()[2])
-        data = data.groupby(['Country_Country', 'Code_Code']).sum().reset_index()
-        data = data[data['Country_Country'].isin(eco_zone[2].unique().tolist() + ['TOT'])]
+        # group data by row and sum
+        data.loc[:, 'Code'] = data['Code'].replace(wiod_to_naics['group'])
+        data.loc[:, 'Country'] = data['Country'].replace(eco_zone.to_dict()[2])
+        data.loc[:, 'Code'] = data.loc[:, 'Country'] + '_' + data.loc[:, 'Code']
+        data = data.groupby(['Code']).sum().reset_index()
 
-        # Group columns by eco zone
-        data.columns = index
-        data.rename(columns=eco_zone.to_dict()[2], inplace=True, level=0)
-        data.to_excel('wiot.xlsx')
+        # data.to_excel('wiot 2.xlsx')
+
+        return data
+
+    def get_global_leontief_matrix(self, by):
+
+        sector = ['A01', 'A02', 'B', 'C10-C12', 'C13-C15', 'C16', 'C17', 'C18', 'C19','C21', 'C22', 'C23',
+                  'C24', 'C25', 'C26', 'C27', 'C28', 'C29', 'C30', 'C31_C32', 'E36', 'E37-E39', 'F', 'G46',
+                  'G47', 'H49', 'H50', 'H51', 'H52', 'I', 'J58', 'J61', 'J62_J63', 'K64', 'K65', 'K66', 'L68',
+                  'M74_M75', 'N', 'O84', 'P85', 'Q', 'R_S', 'S96']
+
+        # Get list of eco zone
+        eco_zone = pd.DataFrame(COUNTRY_ZONE_AND_EXCHG)
+        eco_zone.set_index(1, inplace=True)
+        eco_zone = eco_zone[2].unique().tolist()
+        header = ['Code'] + ['{}_{}'.format(z, s) for z in eco_zone for s in sector] + ['TOT_GO']
+
+        # get the IO tables
+        niot_matrix = self.get_global_wiod_table()
+        niot_matrix.sort_values(by=['Code'], inplace=True)
+        niot_matrix =  niot_matrix[niot_matrix['Code'].isin(header)].set_index('Code')
+        niot_matrix = niot_matrix.fillna(0)
+        niot_matrix = niot_matrix.loc[:, niot_matrix.index.unique()].fillna(0)
+
+        total = niot_matrix[niot_matrix.index== 'TOT_GO'].values[0]
+        axis = 1 if by == IO_SUPPLY else 0
+        niot_matrix = niot_matrix.divide(total, axis=axis)
+        identity_matrix = np.identity(niot_matrix.shape[0])
+
+        diag_matrix = identity_matrix * niot_matrix
+        np.fill_diagonal(niot_matrix.values, 0)
+
+        if by == IO_DEMAND:
+            diag_matrix['total sales'] = diag_matrix.sum(axis=1)
+            diag_matrix['value'] = 1 / (1 - diag_matrix['total sales'])
+            leontief_matrix = 1000 * niot_matrix / diag_matrix['value']
+            leontief_matrix.drop(['TOT_GO'], axis=1, inplace=True)
+            leontief_matrix.drop(['TOT_GO'], inplace=True)
+
+        elif by == IO_SUPPLY:
+            diag_matrix.loc['total production'] = diag_matrix.sum()
+            diag_matrix.loc['value'] = 1 / (1 - diag_matrix.loc['total production'])
+            leontief_matrix = 1000 * niot_matrix / diag_matrix.loc[['value']].values[0]
+            leontief_matrix.drop(['TOT_GO'], axis=1, inplace=True)
+            leontief_matrix.drop(['TOT_GO'], inplace=True)
 
 
-        return
-        data.columns.map('_'.join)
+        return leontief_matrix
 
-        data.columns = index
-        df = data[['USA', 'CAN']]
-        print(data.columns)
-        v = df.groupby(level=1, axis=1).sum()
-        df = df.join(v)
-
-
-        df.to_excel('ok 2.xlsx')
-        print(data.columns.map('_'.join))
-        # print(data.head(10))
+        # leontief_matrix.to_excel('test.xlsx')
+        # leontief_matrix = (identity_matrix - dom_matrix)
+        # np.fill_diagonal(leontief_matrix.values, 1)
+        # leontief_matrix = pd.DataFrame(np.linalg.pinv(leontief_matrix.values), leontief_matrix.columns,
+        #                                leontief_matrix.index)
+        # s = leontief_matrix.sum().sum()/leontief_matrix.shape[0]
+        # leontief_matrix['total sales'] = leontief_matrix.sum(axis=1)
+        # leontief_matrix.loc['total production'] = leontief_matrix.sum()
+        # leontief_matrix = leontief_matrix/ s
+        # prod = leontief_matrix[leontief_matrix.index == 'total production'].transpose()
+        # sales = leontief_matrix[['total sales']]
+        #
+        # result = pd.merge(prod, sales, on=sales.index).head(44)
+        # fig = plt.figure()
+        # ax = fig.add_subplot(111)
+        # plt.plot(result['total production'], result['total sales'], 'ro', [1, 1], [0, 3])
+        # for index, x in result.iterrows():
+        #     ax.annotate(x['key_0'], xy=(x['total production'], x['total sales']), )
+        #
+        # plt.grid()
+        # plt.ylim(0.5, 2.8)
+        # plt.xlim(0.8, 1.35)
+        # plt.show()
 
     @staticmethod
     def apply_ranking(group: pd.DataFrame, by: str, percentile: list) -> pd.DataFrame:
@@ -501,4 +566,4 @@ class MiscellaneousFunctions:
 
         return value
 
-# print(MiscellaneousFunctions().get_leontief_matrix(2010, by=IO_DEMAND))
+# print(MiscellaneousFunctions().get_global_leontief_matrix(IO_DEMAND))

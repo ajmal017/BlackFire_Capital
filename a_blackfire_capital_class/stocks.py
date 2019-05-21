@@ -1606,9 +1606,10 @@ class Stocks:
                 # tornado.ioloop.IOLoop.current().run_sync(DataFromMongoDB(db, 'isin_or_cusip').create_index)
                 data = tornado.ioloop.IOLoop.current().run_sync(DataFromMongoDB(db, query, to_display).get_data_from_db)
                 return data
-            except (pymongo.errors.AutoReconnect, pymongo.errors.ConfigurationError) as e:
+            except (pymongo.errors.AutoReconnect, pymongo.errors.ConfigurationError, pymongo.errors.CursorNotFound) as e:
                 wait_t = 0.5 * pow(2, attempt)  # exponential back off
-                logging.warning("\nPyMongo auto-reconnecting... %s. Waiting %.1f seconds.", str(e), wait_t)
+                logging.warning("\nPyMongo auto-reconnecting... %s. Waiting %.1f seconds. for date %s",
+                                str(e), wait_t, str(my_date))
                 time.sleep(wait_t)
 
     def get_monthly_summary_from_mongodb(self, start_date: date, end_date: date, query: dict = dict(),
@@ -1676,7 +1677,7 @@ class Stocks:
         tab_parameter = [(my_date, query, to_display,) for my_date in date_tab]
 
         # Download Data using multiprocessing.
-        summary = CustomMultiprocessing(num_cpu=50).exec_in_parallel(tab_parameter, self._get_monthly_summary_from_mongodb)
+        summary = CustomMultiprocessing().exec_in_parallel(tab_parameter, self._get_monthly_summary_from_mongodb)
 
         # Unstack _id, price target and consensus.
         start = time.time()

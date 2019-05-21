@@ -344,15 +344,16 @@ class MiscellaneousFunctions:
         diag_matrix = identity_matrix * leontief_matrix
         np.fill_diagonal(leontief_matrix.values, 0)
 
-        if by == IO_DEMAND:
-            diag_matrix['total sales'] = diag_matrix.sum(axis=1)
-            diag_matrix['value'] = 1 / (1 - diag_matrix['total sales'])
-            leontief_matrix = 1000 * leontief_matrix / diag_matrix['value']
-
-        elif by == IO_SUPPLY:
-            diag_matrix.loc['total production'] = diag_matrix.sum()
-            diag_matrix.loc['value'] = 1 / (1 - diag_matrix.loc['total production'])
-            leontief_matrix = 1000 * leontief_matrix / diag_matrix.loc[['value']].values[0]
+        # if by == IO_DEMAND:
+        #     diag_matrix['total sales'] = diag_matrix.sum(axis=1)
+        #     diag_matrix['value'] = 1 / (1 - diag_matrix['total sales'])
+        #     leontief_matrix = 1000 * leontief_matrix / diag_matrix['value']
+        #
+        #
+        # elif by == IO_SUPPLY:
+        #     diag_matrix.loc['total production'] = diag_matrix.sum()
+        #     diag_matrix.loc['value'] = 1 / (1 - diag_matrix.loc['total production'])
+        #     leontief_matrix = 1000 * leontief_matrix / diag_matrix.loc[['value']].values[0]
 
         # leontief_matrix.to_excel('test.xlsx')
         # leontief_matrix = (identity_matrix - dom_matrix)
@@ -377,6 +378,8 @@ class MiscellaneousFunctions:
         # plt.ylim(0.5, 2.8)
         # plt.xlim(0.8, 1.35)
         # plt.show()
+        # leontief_matrix.to_excel('leontief.xlsx')
+        # leontief_matrix['total sales'] = leontief_matrix.sum(axis=1)
         return leontief_matrix
 
     def get_global_wiod_table(self) -> pd.DataFrame:
@@ -455,22 +458,22 @@ class MiscellaneousFunctions:
         diag_matrix = identity_matrix * niot_matrix
         np.fill_diagonal(niot_matrix.values, 0)
 
-        if by == IO_DEMAND:
-            diag_matrix['total sales'] = diag_matrix.sum(axis=1)
-            diag_matrix['value'] = 1 / (1 - diag_matrix['total sales'])
-            leontief_matrix = 1000 * niot_matrix / diag_matrix['value']
-            leontief_matrix.drop(['TOT_GO'], axis=1, inplace=True)
-            leontief_matrix.drop(['TOT_GO'], inplace=True)
+        # if by == IO_DEMAND:
+        #     diag_matrix['total sales'] = diag_matrix.sum(axis=1)
+        #     diag_matrix['value'] = 1 / (1 - diag_matrix['total sales'])
+        #     leontief_matrix = 1000 * niot_matrix / diag_matrix['value']
+        #     leontief_matrix.drop(['TOT_GO'], axis=1, inplace=True)
+        #     leontief_matrix.drop(['TOT_GO'], inplace=True)
+        #
+        # elif by == IO_SUPPLY:
+        #     diag_matrix.loc['total production'] = diag_matrix.sum()
+        #     diag_matrix.loc['value'] = 1 / (1 - diag_matrix.loc['total production'])
+        #     leontief_matrix = 1000 * niot_matrix / diag_matrix.loc[['value']].values[0]
+        #     leontief_matrix.drop(['TOT_GO'], axis=1, inplace=True)
+        #     leontief_matrix.drop(['TOT_GO'], inplace=True)
 
-        elif by == IO_SUPPLY:
-            diag_matrix.loc['total production'] = diag_matrix.sum()
-            diag_matrix.loc['value'] = 1 / (1 - diag_matrix.loc['total production'])
-            leontief_matrix = 1000 * niot_matrix / diag_matrix.loc[['value']].values[0]
-            leontief_matrix.drop(['TOT_GO'], axis=1, inplace=True)
-            leontief_matrix.drop(['TOT_GO'], inplace=True)
 
-
-        return leontief_matrix
+        return niot_matrix
 
         # leontief_matrix.to_excel('test.xlsx')
         # leontief_matrix = (identity_matrix - dom_matrix)
@@ -514,17 +517,24 @@ class MiscellaneousFunctions:
         DataFrame containing one column ranking with the features ranks.
 
         """""
-
-        labels = [str(i + 1) for i in range(len(percentile) - 1)]
-        tab_group = group[[by]].quantile(np.array(percentile), numeric_only=False)
+        # print(group.shape)
         group = group.fillna(np.nan)
+        tab_group = group[[by]].drop_duplicates(subset=[by]).quantile(np.array(percentile), numeric_only=False)
 
-        tab_group['labels'] = ['0'] + labels
-        x = tab_group[[by, 'labels']].drop_duplicates([by])
-        labels = list(x['labels'])
+        tab_group[by] = tab_group[by].astype(float)
+        tab_group.drop_duplicates(subset=[by], inplace=True)
+        labels = [str(int(i)) for i in np.linspace(0, len(percentile) - 1, tab_group.shape[0])]
+
+        tab_group['labels'] = labels
+        x = tab_group[[by, 'labels']]
+
+        # labels = list(x['labels'])
         labels.remove('0')
-        group['ranking_' + by] = pd.cut(group[by], x[by], labels=labels). \
-            values.add_categories('0').fillna('0')
+        if x.shape[0] > 4:
+            group['ranking_' + by] = pd.cut(group[by], x[by], labels=labels). \
+                values.add_categories('0').fillna('0')
+        else:
+            group['ranking_' + by] = '0'
 
         return group
 
@@ -566,4 +576,4 @@ class MiscellaneousFunctions:
 
         return value
 
-# print(MiscellaneousFunctions().get_global_leontief_matrix(IO_DEMAND))
+# print(MiscellaneousFunctions().get_leontief_matrix(2010, IO_DEMAND))

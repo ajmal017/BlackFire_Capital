@@ -122,13 +122,17 @@ class MarketInformation:
         else:
             data = self._data[['date', 'eco zone', 'sector', 'isin_or_cusip', self._signal]].copy()
             data['signal'] = data[self._signal]
-            data.dropna(subset=['signal'], inplace=True)
+            # data.dropna(subset=['signal'], inplace=True)
 
         # rank the signal in percentiles.
         print("\n ***** Ranking the signal between the range [{}, {}] *****".format(
             self._percentile[1] * 10, self._percentile[-1] * 10))
         group = data.groupby(on)
         tab_parameter = [(data, 'signal', self._percentile) for name, data in group]
+
+        # for name, data in group:
+        #      MiscellaneousFunctions().apply_ranking(data, 'signal', self._percentile)
+
         result = CustomMultiprocessing().exec_in_parallel(tab_parameter, MiscellaneousFunctions().apply_ranking)
         result.drop(['signal', self._signal], axis=1, inplace=True)
         result.rename(columns={'ranking_signal': 'signal'}, inplace=True)
@@ -187,12 +191,13 @@ if __name__ == '__main__':
     # sector = np.load('usa_summary_sectors.npy').item()
     # sector = pd.DataFrame(sector['data'], columns=sector['header'])
     # print(sector.columns)
-    path = 'C:/Users/Ghislain/Google Drive/BlackFire Capital/Data/'
-    # path = ''
+    # path = 'C:/Users/Ghislain/Google Drive/BlackFire Capital/Data/'
+    path = ''
 
     stocks = np.load(path + 'S&P Global 1200.npy').item()
     stocks = pd.DataFrame(stocks['data'], columns=stocks['header'])
-    stocks = stocks[stocks['eco zone'] == 'USD']
+    # stocks = stocks[stocks['eco zone'] == 'USD']
+    # print(stocks.groupby(['date'])[['isin_or_cusip']].count())
 
     # Merge with custom group
     custom_sector = MiscellaneousFunctions().get_custom_group_for_io()
@@ -203,5 +208,5 @@ if __name__ == '__main__':
     # print(stocks.columns)
     d = {1: ['date', 'eco zone', 'sector'], 2: ['date', 'sector'], 3: ['date']}
     MarketInformation(stocks, STOCKS_MARKET_DATA_DB_NAME, 'pt_ret', True).display_sheet(
-        d[3], [10], [None])
+        d[2], [10], [None])
 

@@ -307,6 +307,15 @@ class DisplaySheetStatistics:
         ax.yaxis.grid(linestyle=':')
 
         yly_ret = cstat.aggregate_returns(returns, 'yearly') * 100.0
+        yly_ret = yly_ret.to_frame()
+        yly_ret.columns = ['back test']
+
+        if 'return_b' in stats:
+            yly_ret_b = cstat.aggregate_returns(stats['return_b'] , 'yearly') * 100.0
+            yly_ret_b = yly_ret_b.to_frame()
+            yly_ret_b.columns = ['benchmark']
+            yly_ret = pd.merge(yly_ret, yly_ret_b, left_index=True, right_index=True)
+
         yly_ret.plot(ax=ax, kind="bar")
         ax.set_title('Yearly Returns (%)', fontweight='bold')
         ax.set_ylabel('')

@@ -146,7 +146,7 @@ class IOStrategy:
         result = pd.merge(self._sector_data, result[['date', 'sector', 'signal']], on=['date', 'sector'])
 
         value = result.set_index('date').groupby('sector')[['mc', 'signal']].shift(periods=1, freq='M').reset_index()
-        result = pd.merge(self._sector_data[['date', 'sector', 'ret']], value, on=['date', 'sector'])
+        result = pd.merge(self._sector_data[['date','eco zone', 'sector', 'ret']], value, on=['date', 'sector'])
 
         return result
 
@@ -197,8 +197,8 @@ class IOStrategy:
 
     def display_sheet(self):
 
-        # portfolio = self.get_niot_strategy_signal()
-        portfolio = self.get_wiod_strategy_signal()
+        portfolio = self.get_niot_strategy_signal()
+        # portfolio = self.get_wiod_strategy_signal()
         portfolio.rename(columns={'sector': 'constituent', 'ret': 'return'}, inplace=True)
         portfolio.loc[:, 'position'] = None
         portfolio.loc[:, 'group'] = 'ALL'
@@ -217,7 +217,7 @@ class IOStrategy:
         db.close()
 
         header = ['group', 'constituent', 'return', 'mc', 'position']
-        stat = DisplaySheetStatistics(portfolio[header], 'USD', '', benchmark=benchmark[['benchmark']])
+        stat = DisplaySheetStatistics(portfolio[header], 'USD 2', '', benchmark=benchmark[['benchmark']])
         stat.plot_results()
 
 
@@ -225,8 +225,30 @@ if __name__ == '__main__':
 
     # path = 'C:/Users/Ghislain/Google Drive/BlackFire Capital/Data/'
     path = ''
-    stocks = np.load(path + 'S&P Global 1200.npy').item()
+    stocks = np.load(path + 'Global Stocks.npy').item()
     stocks = pd.DataFrame(stocks['data'], columns=stocks['header'])
-    # stocks = stocks[stocks['eco zone'].isin(['USD'])]
+    stocks = stocks[(stocks['adj_pc'] >= 5) & (stocks['mc'] >= 200000000)]
+    stocks = stocks[stocks['eco zone'].isin(['USD'])]
+    # print(stocks['date'].nunique())
+    # print(stocks.columns)
+    # print(stocks.shape)
+    # print(stocks.groupby(['eco zone', 'date'])[['isin_or_cusip']].count().reset_index().groupby('eco zone')[['isin_or_cusip']].mean())
+    IOStrategy(data=stocks, by=IO_DEMAND, signal='ret', consider_history=False).display_sheet()
 
-    IOStrategy(data=stocks, by=IO_SUPPLY, signal='ret',consider_history=False).display_sheet()
+
+    # db = wrds.Connection()
+    # benchmark = db.raw_sql("SELECT datadate, prccm FROM compd.idx_mth WHERE gvkeyx = '000003'")
+    # benchmark['date'] = pd.DatetimeIndex(benchmark['datadate']) + pd.DateOffset(0)
+    # benchmark.set_index('date', inplace=True)
+    # benchmark['benchmark'] = benchmark['prccm'].pct_change(periods=1, freq='M')
+    # benchmark['group'] = 'S&P'
+    # benchmark['constituent'] = 'S&P'
+    # benchmark['return'] = benchmark['benchmark']
+    # benchmark['mc'] = 1
+    # benchmark['position'] = 'l'
+    #
+    # db.close()
+    #
+    # header = ['group', 'constituent', 'return', 'mc', 'position']
+    # stat = DisplaySheetStatistics(benchmark[header], 'USD 2', '', benchmark=benchmark[['benchmark']])
+    # stat.plot_results()

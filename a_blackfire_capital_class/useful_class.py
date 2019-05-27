@@ -500,7 +500,7 @@ class MiscellaneousFunctions:
         # plt.show()
 
     @staticmethod
-    def apply_ranking(group: pd.DataFrame, by: str, percentile: list) -> pd.DataFrame:
+    def apply_ranking(group: pd.DataFrame, feature: list, percentile: list) -> pd.DataFrame:
 
         """"
         Description:
@@ -511,30 +511,29 @@ class MiscellaneousFunctions:
 
         :param
         group: DataFrame containing the values to rank
-        by:  Name of the column to rank
+        feature:  list of value to rank
 
         :return
         DataFrame containing one column ranking with the features ranks.
 
         """""
-        # print(group.shape)
+
         group = group.fillna(np.nan)
-        tab_group = group[[by]].drop_duplicates(subset=[by]).quantile(np.array(percentile), numeric_only=False)
+        for by in feature:
+            tab_group = group[[by]].drop_duplicates(subset=[by]).quantile(np.array(percentile), numeric_only=False)
+            tab_group[by] = tab_group[by].astype(float)
+            tab_group.drop_duplicates(subset=[by], inplace=True)
+            labels = [str(int(i)) for i in np.linspace(0, len(percentile) - 1, tab_group.shape[0])]
 
-        tab_group[by] = tab_group[by].astype(float)
-        tab_group.drop_duplicates(subset=[by], inplace=True)
-        labels = [str(int(i)) for i in np.linspace(0, len(percentile) - 1, tab_group.shape[0])]
+            tab_group['labels'] = labels
+            x = tab_group[[by, 'labels']]
 
-        tab_group['labels'] = labels
-        x = tab_group[[by, 'labels']]
-
-        # labels = list(x['labels'])
-        labels.remove('0')
-        if x.shape[0] > 4:
-            group['ranking_' + by] = pd.cut(group[by], x[by], labels=labels). \
-                values.add_categories('0').fillna('0')
-        else:
-            group['ranking_' + by] = '0'
+            labels.remove('0')
+            if x.shape[0] > 4:
+                group['ranking_' + by] = pd.cut(group[by], x[by], labels=labels). \
+                    values.add_categories('0').fillna('0')
+            else:
+                group['ranking_' + by] = '0'
 
         return group
 
@@ -567,8 +566,8 @@ class MiscellaneousFunctions:
 
             return (group[-1] - group.mean()) / group.std()
 
-        value = data.resample('1M').bfill(limit=1)
-        value = value.rolling(12, min_periods=9).apply(z_score, raw=True)
+        # value = data.resample('1M').bfill(limit=1)
+        value = data.rolling(12, min_periods=9).apply(z_score, raw=True)
 
         value['eco zone'] = identification.get('eco zone', None)
         value['sector'] = identification.get('sector', None)

@@ -1,23 +1,16 @@
 __author__ = 'pougomg'
-import numpy as np
 import pandas as pd
 from datetime import date
 from sklearn import tree, metrics
 from sklearn.ensemble import RandomForestClassifier
-import wrds
-
-from a_blackfire_capital_class.displaysheet import DisplaySheetStatistics
-from a_blackfire_capital_class.useful_class import MiscellaneousFunctions
-from b_blackfire_capital_strategy.input_output import IOStrategy
-from b_blackfire_capital_strategy.market_information import MarketInformation
-from zBlackFireCapitalImportantFunctions.SetGlobalsFunctions import IO_SUPPLY, IO_DEMAND, STOCKS_MARKET_DATA_DB_NAME
 
 
 class StockSelectionWithMLAlgorithm:
 
-    def __init__(self, data):
+    def __init__(self, data, feature):
 
         self._data = data
+        self._feature = feature
 
     @staticmethod
     def _train_data(data):
@@ -44,20 +37,18 @@ class StockSelectionWithMLAlgorithm:
         tab_result = []
 
         for month in range(rolling_periods + 1, len(date_tab)):
-            # print(date_tab[month-rolling_periods-1], date_tab[month -1])
+
             result = data.loc[data['date'].between(date_tab[month-rolling_periods-1], date_tab[month - 1], inclusive=True)]
-            train = self._train_data(result[['io supply signal', 'io demand signal', 'pt return signal', 'ranking_ret']])
+            train = self._train_data(result[self._feature + ['ranking_ret']])
 
             result = data.loc[data['date'].between(date_tab[month], date_tab[month], inclusive=True)]
-            predict = self._predict_data(train, result[['io supply signal', 'io demand signal', 'pt return signal']])
+            predict = self._predict_data(train, result[self._feature])
 
-            result['signal'] = None
-            result.loc[result.index, 'signal'] = predict.tolist()
+            result.loc[:, 'signal'] = None
+            predict = pd.DataFrame(predict.tolist(), index=result.index, columns=['signal'])
+            result.loc[result.index, 'signal'] = predict
             tab_result.append(result)
-            # print(result['date'].unique())
-            # print(predict)
-            #
-            # print('')
+
         return pd.concat(tab_result, ignore_index=True)
 
 

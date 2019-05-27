@@ -38,6 +38,7 @@ class IOStrategy:
             raise ValueError("Incorrect Input value. By must be {} or {}".format(IO_DEMAND, IO_SUPPLY))
 
         s_summary = pd.merge(s_summary.dropna(subset=['sector']), result, left_on='sector', right_on=result.index)
+        s_summary.loc[:, 'value'] = s_summary['value'] - s_summary[signal]
         s_summary = s_summary[['date', 'sector', 'value']]
         s_summary.rename(columns={'value': signal}, inplace=True)
 
